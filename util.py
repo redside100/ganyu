@@ -38,6 +38,7 @@ def create_link_profile_embed(discord_id, discord_avatar_url, uid, level, userna
     embed.add_field(name="Adventure Rank", value=level)
     embed.add_field(name="Discord User", value=f"<@{discord_id}>")
     embed.set_thumbnail(url=discord_avatar_url)
+    embed.set_footer(text="Remember to check and modify settings with /profile")
     embed.colour = GANYU_COLORS['dark']
 
     return embed
