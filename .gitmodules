@@ -1,0 +1,6 @@
+[submodule "genshin.py"]
+	path = genshin.py
+	url = git@github.com:thesadru/genshin.py.git
+[submodule "genshin"]
+	path = genshin
+	url = git@github.com:thesadru/genshin.py.git
