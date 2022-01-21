@@ -1,9 +1,10 @@
 import nextcord
-from nextcord import Interaction, PartialMessageable
+from nextcord import Interaction, PartialMessageable, DMChannel
 from nextcord.abc import GuildChannel
 from nextcord.ext import commands
 
 import json
+
 import db
 from diskcache import Cache
 
@@ -26,22 +27,15 @@ async def ping(interaction: Interaction):
 
 @bot.slash_command(name='link', description='Links a Genshin/Hoyolab account to your Discord user.')
 async def link(interaction: Interaction, ltuid: str, ltoken: str):
-    if isinstance(interaction.channel, GuildChannel):
-        if interaction.user.dm_channel:
-            await interaction.user.dm_channel.send(embed=create_message_embed(
-                "You should only use the link command in DMs with this bot, as it requires you to pass in sensitive "
-                "information!",
+    if interaction.channel.type is not nextcord.ChannelType.private:
+        dm_channel = await interaction.user.create_dm()
+        await dm_channel.send(
+            embed=create_message_embed(
+                "You can only use the link command in DMs with this bot, as it requires you to pass in sensitive "
+                "information.",
                 color=GANYU_COLORS['dark']
-            ))
-        else:
-            dm_channel = await interaction.user.create_dm()
-            await dm_channel.send(
-                embed=create_message_embed(
-                    "You should only use link command in DMs with this bot, as it requires you to pass in sensitive "
-                    "information!",
-                    color=GANYU_COLORS['dark']
-                )
             )
+        )
         return
 
     if not len(ltuid) == 9 or not ltuid.isnumeric():
@@ -73,7 +67,7 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
                                               interaction.user.avatar.url,
                                               uid, level, username)
             if unlinked_discord_id:
-                embed.set_footer(text=f'Warning: Old discord user unlinked (ID {unlinked_discord_id})')
+                embed.set_footer(text=f'Warning: Old Discord user unlinked (ID {unlinked_discord_id})')
 
             await interaction.response.send_message(embed=embed)
         else:
