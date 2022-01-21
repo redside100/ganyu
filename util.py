@@ -1,4 +1,5 @@
 import json
+import time
 
 from nextcord import Interaction
 from nextcord.ui.view import View
@@ -9,6 +10,7 @@ GANYU_COLORS = {
     'light': 0xb5c5d7,
     'dark': 0x505ea9
 }
+SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
 
 
 def dict_factory(cursor, row):
@@ -41,7 +43,7 @@ def create_link_profile_embed(discord_id, discord_avatar_url, uid, level, userna
     return embed
 
 
-def create_profile_card_embed(discord_name, discord_id, discord_avatar_url, uid, user_settings):
+def create_profile_card_embed(discord_name, discord_avatar_url, uid, user_settings):
     embed = nextcord.Embed(title=discord_name)
     embed.add_field(name="UID", value=uid)
     for setting in user_settings:
@@ -56,6 +58,25 @@ def create_profile_card_embed(discord_name, discord_id, discord_avatar_url, uid,
 def create_reward_embed(name, amount, icon_url):
     embed = nextcord.Embed(title="Reward Claimed", description=f"Got {amount}x {name}")
     embed.set_thumbnail(url=icon_url)
+    embed.colour = GANYU_COLORS['dark']
+    return embed
+
+
+def create_status_embed(notes, avatar_url):
+    embed = nextcord.Embed(title="Status")
+    embed.set_thumbnail(url=avatar_url)
+    embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}")
+    embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_comissions}")
+    expeditions = []
+    for expedition in notes.expeditions:
+        exp_str = expedition.character.name + " - `" + str(expedition.status) + "`"
+        if not expedition.finished:
+            exp_str += f' (Finishing <t:{int(time.time() + expedition.remaining_time)}:R>)'
+
+        expeditions.append(exp_str)
+
+    embed.add_field(name="Expeditions", value="\n".join(expeditions), inline=False)
+    embed.colour = GANYU_COLORS['dark']
     return embed
 
 

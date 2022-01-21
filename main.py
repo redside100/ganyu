@@ -6,10 +6,12 @@ from nextcord.ext import commands
 import json
 import db
 from diskcache import Cache
+
+import util
 from genshin.genshin.client import MultiCookieClient, GenshinClient
-from genshin.genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed
+from genshin.genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic
 from util import create_message_embed, create_link_profile_embed, GANYU_COLORS, create_profile_card_embed, \
-    ProfileChoices, create_reward_embed
+    ProfileChoices, create_reward_embed, create_status_embed
 
 bot = commands.Bot(command_prefix='!', intents=nextcord.Intents.all())
 bot.remove_command('help')
@@ -99,7 +101,7 @@ async def profile(interaction: Interaction):
         user_settings = {
             'Auto Check-in': 'No' if user_data['daily_reward'] == 0 else 'Yes'
         }
-        embed = create_profile_card_embed(discord_name, discord_id, avatar_url, user_data['uid'], user_settings)
+        embed = create_profile_card_embed(discord_name, avatar_url, user_data['uid'], user_settings)
         view = ProfileChoices(discord_id, discord_name, avatar_url, interaction)
         await interaction.response.send_message(embed=embed, view=view)
     else:
@@ -138,11 +140,40 @@ async def claim(interaction: Interaction):
     await user_client.close()
 
 
+@bot.slash_command(name='status', description='Shows some in-game stats on your account.')
+async def status(interaction: Interaction):
+    discord_id = interaction.user.id
+    avatar_url = interaction.user.avatar.url
+    user_data = db.get_link_entry(discord_id)
+    if not user_data:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You don't have an account linked.",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    user_client = GenshinClient({
+        'ltuid': user_data['ltuid'],
+        'ltoken': user_data['ltoken']
+    })
+
+    try:
+        notes = await user_client.get_notes(int(user_data['uid']))
+        await interaction.response.send_message(embed=create_status_embed(notes, avatar_url))
+    except DataNotPublic:
+        embed = create_message_embed("You need to enable Real-Time Notes in your HoyoLab privacy settings to use this!")
+        embed.set_image(url=util.SETTINGS_IMG_URL)
+        await interaction.response.send_message(embed=embed)
+
+    await user_client.close()
+
+
 @bot.event
 async def on_ready():
     print('Logged into Discord!')
     init()
     await bot.associate_application_commands()
+    await bot.delete_unknown_application_commands()
 
 
 def init():
