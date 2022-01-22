@@ -43,6 +43,11 @@ def get_link_entry(discord_id):
     return None
 
 
+def get_all_auto_checkin_users():
+    data = get_cursor().execute("SELECT * FROM user_data WHERE daily_reward = TRUE").fetchall()
+    return data
+
+
 def uid_exists(uid):
     data = get_cursor().execute("SELECT uid FROM user_data WHERE uid = :uid", {
         "uid": uid

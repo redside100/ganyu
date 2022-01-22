@@ -1,9 +1,12 @@
-import nextcord
-from nextcord import Interaction, PartialMessageable, DMChannel
-from nextcord.abc import GuildChannel
-from nextcord.ext import commands
+import asyncio
+import logging
+import time
+import random
 
-import json
+import nextcord
+from nextcord import Interaction
+from nextcord.ext import commands
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import db
 from diskcache import Cache
@@ -14,10 +17,13 @@ from genshin.genshin.errors import InvalidCookies, GenshinException, AlreadyClai
 from util import create_message_embed, create_link_profile_embed, GANYU_COLORS, create_profile_card_embed, \
     ProfileChoices, create_reward_embed, create_status_embed
 
+logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
+
 bot = commands.Bot(command_prefix='!', intents=nextcord.Intents.all())
 bot.remove_command('help')
-settings = None
 cache = None
+scheduler = AsyncIOScheduler(timezone='UTC')
 
 
 @bot.slash_command(name='ping', description='Pong!')
@@ -162,10 +168,118 @@ async def status(interaction: Interaction):
     await user_client.close()
 
 
+@bot.slash_command(name='log', description='Ganyu mod usage only.')
+async def log(interaction: Interaction):
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+    if discord_id not in settings['ganyu_mods']:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You can't use this command...",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    if interaction.channel.type is nextcord.ChannelType.private:
+        await interaction.response.send_message(embed=create_message_embed(
+            f"Can't set master log channel to private DMs",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    settings['log_channel'] = interaction.channel_id
+    util.set_settings(settings)
+    await interaction.response.send_message(embed=create_message_embed(
+        f"Master log channel set to <#{interaction.channel_id}>",
+        GANYU_COLORS['dark']
+    ))
+
+
+@bot.slash_command(name='sendlog', description='Ganyu mod usage only.')
+async def sendlog(interaction: Interaction, message: str):
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+    if discord_id not in settings['ganyu_mods']:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You can't use this command...",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    log_channel_id = settings.get('log_channel')
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+        if channel is None:
+            await interaction.response.send_message(embed=create_message_embed(
+                f"Master log channel is invalid (may have been deleted)"
+            ))
+            return
+
+        await channel.send(embed=create_message_embed(
+            message
+        ))
+        await interaction.response.send_message(embed=create_message_embed(
+            f"Message sent to <#{log_channel_id}>"
+        ))
+    else:
+        await interaction.response.send_message(embed=create_message_embed(
+            f"No master log channel is set"
+        ))
+
+
+@scheduler.scheduled_job(util.DAILY_REWARD_CRON_TRIGGER, id='daily_rewards')
+async def auto_collect_daily_rewards():
+    users = db.get_all_auto_checkin_users()
+    settings = util.get_settings()
+    log_channel_id = settings.get('log_channel')
+    success = 0
+    start_time = int(time.time())
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+        if channel:
+            await channel.send(embed=create_message_embed(
+                f"Collecting daily rewards for {len(users)} user(s)..."
+            ))
+
+    for user_data in users:
+        user_client = GenshinClient({
+            'ltuid': user_data['ltuid'],
+            'ltoken': user_data['ltoken']
+        })
+        try:
+            await user_client.claim_daily_reward(reward=False)
+            success += 1
+        except GenshinException:
+            pass
+
+        await user_client.close()
+        await asyncio.sleep(random.randint(0, 2))
+
+    time_elapsed = int(time.time()) - start_time
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+        if channel:
+            await channel.send(embed=create_message_embed(
+                f"Successfully collected rewards for {success}/{len(users)} user(s)\n"
+                f"Time elapsed: {time_elapsed} second(s)"
+            ))
+            jobs = util.get_scheduler_jobs(scheduler)
+            next_timestamp = None
+            for job in jobs:
+                if job['id'] == 'daily_rewards':
+                    next_timestamp = job['next_run_time'].timestamp()
+
+            if next_timestamp:
+                await channel.send(embed=create_message_embed(
+                    f"Next collection scheduled for <t:{int(next_timestamp)}:F>"
+                ))
+
+
 @bot.event
 async def on_ready():
     print('Logged into Discord!')
     init()
+    scheduler.start()
+    logging.info(util.get_scheduler_jobs(scheduler))
     await bot.associate_application_commands()
     await bot.delete_unknown_application_commands()
 
@@ -177,7 +291,5 @@ def init():
 
 
 if __name__ == '__main__':
-    with open("settings.json") as f:
-        settings = json.loads(f.read())
-
+    settings = util.get_settings()
     bot.run(settings['token'])

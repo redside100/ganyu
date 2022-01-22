@@ -1,6 +1,8 @@
 import json
 import time
 
+import pytz
+from apscheduler.triggers.cron import CronTrigger
 from nextcord import Interaction
 from nextcord.ui.view import View
 import nextcord
@@ -11,6 +13,25 @@ GANYU_COLORS = {
     'dark': 0x505ea9
 }
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
+# Daily reward becomes available at 5 pm UTC
+DAILY_REWARD_CRON_TRIGGER = CronTrigger(
+    hour='17',
+    timezone=pytz.UTC,
+    jitter=3600  # anytime within that hour
+)
+
+
+def get_scheduler_jobs(scheduler):
+    jobs = scheduler.get_jobs()
+    detailed_jobs = []
+    for job in jobs:
+        detailed_jobs.append({
+            'id': job.id,
+            'name': job.name,
+            'next_run_time': job.next_run_time
+        })
+
+    return detailed_jobs
 
 
 def dict_factory(cursor, row):
