@@ -69,3 +69,8 @@ def delete_entry_by_uid(uid):
     con.commit()
 
     return discord_id
+
+
+def user_count():
+    data = get_cursor().execute("SELECT COUNT(*) as linked FROM user_data").fetchone()['linked']
+    return data

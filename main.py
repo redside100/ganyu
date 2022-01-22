@@ -230,6 +230,41 @@ async def sendlog(interaction: Interaction, message: str):
         ))
 
 
+@bot.slash_command(name='ganyustatus', description='Ganyu mod usage only.')
+async def ganyu_status(interaction: Interaction):
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+
+    if discord_id not in settings['ganyu_mods']:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You can't use this command...",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    user_count = db.user_count()
+    bot_accounts = len(settings['accounts'])
+    log_channel_id = settings.get('log_channel')
+
+    embed = nextcord.Embed(title="Ganyu Status")
+    embed.add_field(name="Linked Users", value=user_count)
+    embed.add_field(name="Bot Accounts", value=bot_accounts)
+    if log_channel_id:
+        embed.add_field(name="Log Channel", value=f'<#{log_channel_id}>', inline=False)
+    jobs = util.get_scheduler_jobs(scheduler)
+    next_timestamp = None
+    for job in jobs:
+        if job['id'] == 'daily_rewards':
+            next_timestamp = job['next_run_time'].timestamp()
+
+    if next_timestamp:
+        embed.add_field(name="Next Reward Collection", value=f'<t:{int(next_timestamp)}:F>', inline=False)
+
+    embed.colour = GANYU_COLORS['dark']
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    await interaction.response.send_message(embed=embed)
+
+
 @scheduler.scheduled_job(util.DAILY_REWARD_CRON_TRIGGER, id='daily_rewards')
 async def auto_collect_daily_rewards():
     users = db.get_all_auto_checkin_users()
