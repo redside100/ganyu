@@ -55,6 +55,8 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
         'ltuid': ltuid,
         'ltoken': ltoken
     })
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
     try:
         accounts = await user_client.genshin_accounts()
         if len(accounts) > 0:
@@ -75,15 +77,15 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
             if unlinked_discord_id:
                 embed.set_footer(text=f'Warning: Old Discord user unlinked (ID {unlinked_discord_id})')
 
-            await interaction.response.send_message(embed=embed)
+            await interaction.edit_original_message(embed=embed)
         else:
-            await interaction.response.send_message(embed=create_message_embed(
+            await interaction.edit_original_message(embed=create_message_embed(
                 "You don't have any genshin accounts!",
                 GANYU_COLORS['dark']
             ))
 
     except InvalidCookies:
-        await interaction.response.send_message(embed=create_message_embed(
+        await interaction.edit_original_message(embed=create_message_embed(
             "Invalid auth cookies!",
             GANYU_COLORS['dark']
         ))
@@ -126,13 +128,14 @@ async def claim(interaction: Interaction):
         'ltuid': user_data['ltuid'],
         'ltoken': user_data['ltoken']
     })
-
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
     try:
         reward = await user_client.claim_daily_reward()
 
-        await interaction.response.send_message(embed=create_reward_embed(reward.name, reward.amount, reward.icon))
+        await interaction.edit_original_message(embed=create_reward_embed(reward.name, reward.amount, reward.icon))
     except AlreadyClaimed:
-        await interaction.response.send_message(embed=create_message_embed(
+        await interaction.edit_original_message(embed=create_message_embed(
             "Daily reward was already claimed today!",
             GANYU_COLORS['dark']
         ))
@@ -156,14 +159,15 @@ async def status(interaction: Interaction):
         'ltuid': user_data['ltuid'],
         'ltoken': user_data['ltoken']
     })
-
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
     try:
         notes = await user_client.get_notes(int(user_data['uid']))
-        await interaction.response.send_message(embed=create_status_embed(notes, avatar_url))
+        await interaction.edit_original_message(embed=create_status_embed(notes, avatar_url))
     except DataNotPublic:
         embed = create_message_embed("You need to enable Real-Time Notes in your HoyoLab privacy settings to use this!")
         embed.set_image(url=util.SETTINGS_IMG_URL)
-        await interaction.response.send_message(embed=embed)
+        await interaction.edit_original_message(embed=embed)
 
     await user_client.close()
 

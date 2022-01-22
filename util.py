@@ -110,6 +110,12 @@ def create_message_embed(message, color=GANYU_COLORS['dark'], thumbnail=None):
     return embed
 
 
+def loading_embed():
+    embed = nextcord.Embed(description="Working on it...")
+    embed.colour = GANYU_COLORS['light']
+    return embed
+
+
 class ProfileChoices(View):
     def __init__(self, user_id, user_name, user_avatar, base_interaction):
         super().__init__(timeout=120)
