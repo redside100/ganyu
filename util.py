@@ -131,7 +131,7 @@ class ProfileChoices(View):
         user_settings = {
             'Auto Check-in': 'No' if not user_data['daily_reward'] == 0 else 'Yes'
         }
-        embed = create_profile_card_embed(self.user_name, self.user_id, self.user_avatar, user_data['uid'], user_settings)
+        embed = create_profile_card_embed(self.user_name, self.user_avatar, user_data['uid'], user_settings)
         await self.base_interaction.edit_original_message(embed=embed)
 
 
