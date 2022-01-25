@@ -15,7 +15,7 @@ import util
 from genshin.genshin.client import MultiCookieClient, GenshinClient
 from genshin.genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic
 from util import create_message_embed, create_link_profile_embed, GANYU_COLORS, create_profile_card_embed, \
-    ProfileChoices, create_reward_embed, create_status_embed
+    ProfileChoices, create_reward_embed, create_status_embed, MessageBook
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
@@ -170,6 +170,40 @@ async def status(interaction: Interaction):
         await interaction.edit_original_message(embed=embed)
 
     await user_client.close()
+
+
+@bot.slash_command(name='schedule', description='Shows current or upcoming events.')
+async def schedule(interaction: Interaction, detailed: bool = False):
+    discord_id = interaction.user.id
+    avatar_url = interaction.user.avatar.url
+
+    schedule_info = util.get_schedule_info()
+    pages = []
+    if not detailed:
+        pages.append(util.create_schedule_embed(schedule_info, bot.user.avatar.url, False))
+        pages.append(util.create_schedule_embed(schedule_info, bot.user.avatar.url, True))
+    else:
+        current = []
+        future = []
+        cur_time = int(time.time())
+
+        for event in schedule_info:
+            if event['start'] <= cur_time <= event['end']:
+                current.append(event)
+            elif event['start'] > cur_time:
+                future.append(event)
+
+        current.sort(key=lambda x: x['end'])
+        future.sort(key=lambda x: x['start'])
+
+        for event in current:
+            pages.append(util.create_event_embed(event))
+
+        for event in future:
+            pages.append(util.create_event_embed(event))
+
+    view = MessageBook(discord_id, avatar_url, pages, interaction)
+    await interaction.response.send_message(embed=pages[0], view=view)
 
 
 @bot.slash_command(name='log', description='Ganyu mod usage only.')

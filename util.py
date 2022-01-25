@@ -1,24 +1,34 @@
+import ast
 import json
 import time
+from datetime import datetime, timezone
+from typing import List
 
+import requests
 import pytz
 from apscheduler.triggers.cron import CronTrigger
-from nextcord import Interaction
+from nextcord import Interaction, Embed
 from nextcord.ui.view import View
 import nextcord
 import db
+import re
+import demjson
+from diskcache import Cache
 
 GANYU_COLORS = {
     'light': 0xb5c5d7,
     'dark': 0x505ea9
 }
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
+PAIMON_MOE_URL_BASE = 'https://paimon.moe'
+PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
 # Daily reward becomes available at 5 pm UTC
 DAILY_REWARD_CRON_TRIGGER = CronTrigger(
     hour='17',
     timezone=pytz.UTC,
     jitter=3600  # anytime within that hour
 )
+cache = Cache("cache")
 
 
 def get_scheduler_jobs(scheduler):
@@ -32,6 +42,41 @@ def get_scheduler_jobs(scheduler):
         })
 
     return detailed_jobs
+
+
+def get_schedule_info():
+    cache_key = 'timeline'
+    if cache_key in cache:
+        return cache[cache_key]
+
+    timeline_js = get_paimon_moe_timeline_js()
+    if timeline_js:
+        res = requests.get(f'{PAIMON_MOE_URL_BASE}{timeline_js}')
+        raw = res.text
+        info = demjson.decode(raw[raw.index('['):raw.index('];') + 1].replace('!0', '1'))
+        # unpack stuff and format dates
+        consolidated_event_list = []
+        for event_list in info:
+            for event in event_list:
+                event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
+                                     .replace(tzinfo=timezone.utc).timestamp())
+                event['end'] = int(datetime.strptime(event['end'], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc).timestamp())
+                consolidated_event_list.append(event)
+
+        cache.set(cache_key, consolidated_event_list, expire=3600)  # 1 hr cache
+        return consolidated_event_list
+
+    return None
+
+
+def get_paimon_moe_timeline_js():
+    res = requests.get(f'{PAIMON_MOE_URL_BASE}/timeline/')
+    matches = re.findall("/client/timeline.\\w+.js", res.text)
+    if len(matches) > 0:
+        return matches[0]
+    else:
+        return None
 
 
 def dict_factory(cursor, row):
@@ -101,6 +146,73 @@ def create_status_embed(notes, avatar_url):
     return embed
 
 
+def create_schedule_embed(event_list, avatar_url, future=False):
+    schedule = []
+
+    current_time = int(time.time())
+
+    if future:
+        title = "Upcoming Events"
+    else:
+        title = "Current Events"
+
+    if future:
+        event_list.sort(key=lambda x: x['start'])
+    else:
+        event_list.sort(key=lambda x: x['end'])
+
+    for event in event_list:
+        name = event['name']
+        url = event.get('url')
+        start_time = event['start']
+        end_time = event['end']
+
+        if start_time <= current_time <= end_time and not future:
+            if url:
+                schedule.append(f'[{name}]({url}) ends <t:{end_time}:R>')
+            else:
+                schedule.append(f'{name} ends <t:{end_time}:R>')
+        elif start_time > current_time and future:
+            if url:
+                schedule.append(f'[{name}]({url}) starts <t:{start_time}:R>')
+            else:
+                schedule.append(f'{name} starts <t:{start_time}:R>')
+
+    embed = nextcord.Embed(title=title, description="\n".join(schedule))
+    embed.set_thumbnail(url=avatar_url)
+    embed.colour = GANYU_COLORS['dark']
+    return embed
+
+
+def create_event_embed(event):
+    # wtf is this man
+    current_time = int(time.time())
+    start_time = event['start']
+    end_time = event['end']
+
+    if start_time <= current_time <= end_time:
+        desc = f'Ends <t:{end_time}:R>'
+    elif start_time > current_time:
+        desc = f'Starts <t:{start_time}:R>'
+
+    embed = nextcord.Embed(title=event['name'], description=desc)
+    if event.get('url'):
+        embed.url = event['url']
+
+    if event.get('description'):
+        embed.description += '\n\n' + event['description']
+
+    if event.get('image'):
+        image = event['image']
+        embed.set_image(url=f'{PAIMON_MOE_EVENT_IMG_BASE}/{image}')
+    if event.get('color'):
+        embed.colour = int('0x' + event['color'][1:], base=16)
+    else:
+        embed.colour = GANYU_COLORS['dark']
+
+    return embed
+
+
 def create_message_embed(message, color=GANYU_COLORS['dark'], thumbnail=None):
     embed = nextcord.Embed(description=message)
     embed.colour = color
@@ -117,7 +229,7 @@ def loading_embed():
 
 
 class ProfileChoices(View):
-    def __init__(self, user_id, user_name, user_avatar, base_interaction):
+    def __init__(self, user_id, user_name, user_avatar, base_interaction: Interaction):
         super().__init__(timeout=120)
         self.base_interaction: Interaction = base_interaction
         self.user_avatar = user_avatar
@@ -141,3 +253,46 @@ class ProfileChoices(View):
         await self.base_interaction.edit_original_message(embed=embed)
 
 
+class MessageBook(View):
+    def __init__(self, user_id: int, user_avatar_url: str, pages: List[Embed], base_interaction: Interaction):
+        super().__init__(timeout=120)
+        self.page_count = len(pages)
+
+        for i, page in enumerate(pages):
+            page.set_footer(text=f'Page {i + 1} of {self.page_count}', icon_url=user_avatar_url)
+
+        self.base_interaction = base_interaction
+        self.pages = pages
+        self.user_id = user_id
+        self.current_page = 0
+
+    @nextcord.ui.button(label="Prev", style=nextcord.ButtonStyle.blurple)
+    async def prev_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if not interaction.user.id == self.user_id:
+            return
+
+        await self.prev_page()
+
+    @nextcord.ui.button(label="Next", style=nextcord.ButtonStyle.blurple)
+    async def next_button(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        if not interaction.user.id == self.user_id:
+            return
+
+        await self.next_page()
+
+    async def next_page(self):
+        self.current_page += 1
+        if self.current_page > len(self.pages) - 1:
+            self.current_page = 0
+
+        await self.update_page()
+
+    async def prev_page(self):
+        self.current_page -= 1
+        if self.current_page < 0:
+            self.current_page = len(self.pages) - 1
+
+        await self.update_page()
+
+    async def update_page(self):
+        await self.base_interaction.edit_original_message(embed=self.pages[self.current_page])
