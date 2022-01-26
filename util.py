@@ -1,5 +1,7 @@
 import ast
+import asyncio
 import json
+import sys
 import time
 from datetime import datetime, timezone
 from typing import List
@@ -15,6 +17,9 @@ import re
 import demjson
 from diskcache import Cache
 
+from genshin.genshin import GenshinClient
+from genshin.genshin.models import DiaryData, Diary
+
 GANYU_COLORS = {
     'light': 0xb5c5d7,
     'dark': 0x505ea9
@@ -22,6 +27,9 @@ GANYU_COLORS = {
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
 PAIMON_MOE_URL_BASE = 'https://paimon.moe'
 PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
+
+PRIMO_EMOJI = '<:primogem:935934046029115462>'
+MORA_EMOJI = '<:mora:935934436594286652>'
 # Daily reward becomes available at 5 pm UTC
 DAILY_REWARD_CRON_TRIGGER = CronTrigger(
     hour='17',
@@ -213,6 +221,37 @@ def create_event_embed(event):
     return embed
 
 
+def create_report_overview_embed(data: Diary, avatar_url):
+    embed = nextcord.Embed(title='Income Overview', description='Does not include Welkins or top-up income.')
+    primo_percent = data.data.primogems_rate
+    mora_percent = data.data.mora_rate
+    if primo_percent > 0:
+        primo_percent = f'+{primo_percent}'
+    if mora_percent > 0:
+        mora_percent = f'+{mora_percent}'
+
+    embed.add_field(name="Current Month", value=f'{PRIMO_EMOJI} {data.data.current_primogems}'
+                                                f' `({primo_percent}%)`\n{MORA_EMOJI}'
+                                                f' {data.data.current_mora} `({mora_percent}%)`')
+    embed.add_field(name="Last Month", value=f'{PRIMO_EMOJI} {data.data.last_primogems}\n{MORA_EMOJI}'
+                                             f' {data.data.last_mora}')
+    embed.add_field(name="Today", value=f'{PRIMO_EMOJI} {data.day_data.current_primogems}\n{MORA_EMOJI}'
+                                        f' {data.day_data.current_mora}')
+    embed.set_thumbnail(url=avatar_url)
+    embed.colour = GANYU_COLORS['dark']
+    return embed
+
+
+def create_report_breakdown_embed(data: Diary, avatar_url):
+    embed = nextcord.Embed(title='Income Breakdown', description='Does not include Welkins or top-up income.')
+    for category in data.data.categories:
+        embed.add_field(name=category.name, value=f'{PRIMO_EMOJI} {category.amount} `({category.percentage}%)`')
+
+    embed.set_thumbnail(url=avatar_url)
+    embed.colour = GANYU_COLORS['dark']
+    return embed
+
+
 def create_message_embed(message, color=GANYU_COLORS['dark'], thumbnail=None):
     embed = nextcord.Embed(description=message)
     embed.colour = color
@@ -296,3 +335,5 @@ class MessageBook(View):
 
     async def update_page(self):
         await self.base_interaction.edit_original_message(embed=self.pages[self.current_page])
+
+

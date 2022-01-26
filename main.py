@@ -206,6 +206,39 @@ async def schedule(interaction: Interaction, detailed: bool = False):
     await interaction.response.send_message(embed=pages[0], view=view)
 
 
+@bot.slash_command(name='income', description='Retrieves a report of your primogem/mora income.')
+async def income(interaction: Interaction):
+    discord_id = interaction.user.id
+    avatar_url = interaction.user.avatar.url
+    user_data = db.get_link_entry(discord_id)
+    if not user_data:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You don't have an account linked.",
+            GANYU_COLORS['dark']
+        ))
+        return
+    user_client = GenshinClient({
+        'ltuid': user_data['ltuid'],
+        'ltoken': user_data['ltoken']
+    })
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
+    try:
+        diary = await user_client.get_diary()
+        pages = [
+            util.create_report_overview_embed(diary, avatar_url),
+            util.create_report_breakdown_embed(diary, avatar_url)
+        ]
+        view = MessageBook(discord_id, avatar_url, pages, interaction)
+        await interaction.edit_original_message(embed=pages[0], view=view)
+
+    except Exception:
+        embed = create_message_embed("Something went wrong...")
+        await interaction.edit_original_message(embed=embed)
+
+    await user_client.close()
+
+
 @bot.slash_command(name='log', description='Ganyu mod usage only.')
 async def log(interaction: Interaction):
     discord_id = interaction.user.id
