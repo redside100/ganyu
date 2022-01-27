@@ -33,6 +33,11 @@ Clone the repository
 
 `git clone git@github.com:redside100/ganyu.git && cd ganyu`
 
+Install submodules
+
+`git submodule init && git submodule update`
+
+
 Install dependencies (Python 3.9+)
 
 `pip install -r requirements.txt`
