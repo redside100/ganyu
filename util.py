@@ -17,6 +17,7 @@ import re
 import demjson
 from diskcache import Cache
 
+
 from genshin.genshin import GenshinClient
 from genshin.genshin.models import DiaryData, Diary
 
@@ -139,8 +140,10 @@ def create_reward_embed(name, amount, icon_url):
 def create_status_embed(notes, avatar_url):
     embed = nextcord.Embed(title="Status")
     embed.set_thumbnail(url=avatar_url)
-    embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}")
-    embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_comissions}")
+    # 2022-04-13 02:17:28.632936-04:00
+    recover_time: datetime = notes.resin_recovered_at
+    embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}\nFull <t:{int(recover_time.timestamp())}:R>")
+    embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_comissions} Finished")
     expeditions = []
     for expedition in notes.expeditions:
         exp_str = expedition.character.name + " - `" + str(expedition.status) + "`"
