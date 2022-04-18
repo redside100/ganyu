@@ -9,6 +9,8 @@ from typing import List
 import requests
 import pytz
 from apscheduler.triggers.cron import CronTrigger
+from genshin.models import Notes
+from genshin.models.genshin.diary import Diary
 from nextcord import Interaction, Embed
 from nextcord.ui.view import View
 import nextcord
@@ -16,10 +18,6 @@ import db
 import re
 import demjson
 from diskcache import Cache
-
-
-from genshin.genshin import GenshinClient
-from genshin.genshin.models import DiaryData, Diary
 
 GANYU_COLORS = {
     'light': 0xb5c5d7,
@@ -31,6 +29,7 @@ PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
 
 PRIMO_EMOJI = '<:primogem:935934046029115462>'
 MORA_EMOJI = '<:mora:935934436594286652>'
+
 # Daily reward becomes available at 5 pm UTC
 DAILY_REWARD_CRON_TRIGGER = CronTrigger(
     hour='17',
@@ -107,7 +106,7 @@ def set_settings(settings):
 
 
 def create_link_profile_embed(discord_id, discord_avatar_url, uid, level, username):
-    embed = nextcord.Embed(title=f"Successfully linked!")
+    embed = nextcord.Embed(title="Successfully linked!")
     embed.add_field(name="UID", value=uid)
     embed.add_field(name="Name", value=username)
     embed.add_field(name="Adventure Rank", value=level)
@@ -137,13 +136,16 @@ def create_reward_embed(name, amount, icon_url):
     return embed
 
 
-def create_status_embed(notes, avatar_url):
+def create_status_embed(notes: Notes, avatar_url):
     embed = nextcord.Embed(title="Status")
     embed.set_thumbnail(url=avatar_url)
-    # 2022-04-13 02:17:28.632936-04:00
-    recover_time: datetime = notes.resin_recovered_at
-    embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}\nFull <t:{int(recover_time.timestamp())}:R>")
-    embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_comissions} Finished")
+    embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_commissions} Finished", inline=False)
+    cur_time = time.time()
+    recover_time = int(cur_time + notes.remaining_resin_recovery_time)
+    embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}\nFull <t:{recover_time}:R>")
+    realm_currency_time = int(cur_time + notes.remaining_realm_currency_recovery_time)
+    embed.add_field(name="Realm Currency", value=f"{notes.current_realm_currency}/{notes.max_realm_currency}"
+                                                 f"\nFull <t:{realm_currency_time}:R>")
     expeditions = []
     for expedition in notes.expeditions:
         exp_str = expedition.character.name + " - `" + str(expedition.status) + "`"

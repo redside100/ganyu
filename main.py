@@ -3,6 +3,7 @@ import logging
 import time
 import random
 
+import genshin
 import nextcord
 from nextcord import Interaction
 from nextcord.ext import commands
@@ -12,8 +13,8 @@ import db
 from diskcache import Cache
 
 import util
-from genshin.genshin.client import MultiCookieClient, GenshinClient
-from genshin.genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic
+from genshin.client import MultiCookieClient, Client
+from genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic
 from util import create_message_embed, create_link_profile_embed, GANYU_COLORS, create_profile_card_embed, \
     ProfileChoices, create_reward_embed, create_status_embed, MessageBook
 
@@ -51,10 +52,11 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
         ))
         return
 
-    user_client = GenshinClient({
+    user_client = Client({
         'ltuid': ltuid,
         'ltoken': ltoken
     })
+    user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -90,8 +92,6 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
             GANYU_COLORS['dark']
         ))
 
-    await user_client.close()
-
 
 @bot.slash_command(name='profile', description='Shows information about your linked user.')
 async def profile(interaction: Interaction):
@@ -124,10 +124,11 @@ async def claim(interaction: Interaction):
         ))
         return
 
-    user_client = GenshinClient({
+    user_client = Client({
         'ltuid': user_data['ltuid'],
         'ltoken': user_data['ltoken']
     })
+    user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -139,8 +140,6 @@ async def claim(interaction: Interaction):
             "Daily reward was already claimed today!",
             GANYU_COLORS['dark']
         ))
-
-    await user_client.close()
 
 
 @bot.slash_command(name='status', description='Shows some in-game stats on your account.')
@@ -155,10 +154,11 @@ async def status(interaction: Interaction):
         ))
         return
 
-    user_client = GenshinClient({
+    user_client = Client({
         'ltuid': user_data['ltuid'],
         'ltoken': user_data['ltoken']
     })
+    user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -168,8 +168,6 @@ async def status(interaction: Interaction):
         embed = create_message_embed("You need to enable Real-Time Notes in your HoyoLab privacy settings to use this!")
         embed.set_image(url=util.SETTINGS_IMG_URL)
         await interaction.edit_original_message(embed=embed)
-
-    await user_client.close()
 
 
 @bot.slash_command(name='schedule', description='Shows current or upcoming events.')
@@ -217,10 +215,11 @@ async def income(interaction: Interaction):
             GANYU_COLORS['dark']
         ))
         return
-    user_client = GenshinClient({
+    user_client = Client({
         'ltuid': user_data['ltuid'],
         'ltoken': user_data['ltoken']
     })
+    user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -235,8 +234,6 @@ async def income(interaction: Interaction):
     except Exception:
         embed = create_message_embed("Something went wrong...")
         await interaction.edit_original_message(embed=embed)
-
-    await user_client.close()
 
 
 @bot.slash_command(name='log', description='Ganyu mod usage only.')
@@ -313,7 +310,7 @@ async def ganyu_status(interaction: Interaction):
     bot_accounts = len(settings['accounts'])
     log_channel_id = settings.get('log_channel')
 
-    embed = nextcord.Embed(title="Ganyu Status")
+    embed = nextcord.Embed(title=f"{util.EMOJI_SNOWFLAKE} Ganyu Status")
     embed.add_field(name="Linked Users", value=user_count)
     embed.add_field(name="Bot Accounts", value=bot_accounts)
     if log_channel_id:
@@ -347,17 +344,17 @@ async def auto_collect_daily_rewards():
             ))
 
     for user_data in users:
-        user_client = GenshinClient({
+        user_client = Client({
             'ltuid': user_data['ltuid'],
             'ltoken': user_data['ltoken']
         })
+        user_client.default_game = genshin.Game.GENSHIN
         try:
             await user_client.claim_daily_reward(reward=False)
             success += 1
         except GenshinException:
             pass
 
-        await user_client.close()
         await asyncio.sleep(random.randint(0, 2))
 
     time_elapsed = int(time.time()) - start_time
