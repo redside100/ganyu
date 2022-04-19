@@ -66,10 +66,8 @@ def get_schedule_info():
         consolidated_event_list = []
         for event_list in info:
             for event in event_list:
-                event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
-                                     .replace(tzinfo=timezone.utc).timestamp())
-                event['end'] = int(datetime.strptime(event['end'], "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc).timestamp())
+                event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S").timestamp())
+                event['end'] = int(datetime.strptime(event['end'], "%Y-%m-%d %H:%M:%S").timestamp())
                 consolidated_event_list.append(event)
 
         cache.set(cache_key, consolidated_event_list, expire=3600)  # 1 hr cache
