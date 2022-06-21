@@ -67,9 +67,9 @@ def get_schedule_info():
         for event_list in info:
             for event in event_list:
                 event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
-                                     .replace(tzinfo=pytz.FixedOffset(-180)).timestamp())
+                                     .replace(tzinfo=pytz.FixedOffset(-300)).timestamp())
                 event['end'] = int(datetime.strptime(event['end'], "%Y-%m-%d %H:%M:%S")
-                                   .replace(tzinfo=pytz.FixedOffset(-180)).timestamp())
+                                   .replace(tzinfo=pytz.FixedOffset(-300)).timestamp())
                 consolidated_event_list.append(event)
 
         cache.set(cache_key, consolidated_event_list, expire=3600)  # 1 hr cache
