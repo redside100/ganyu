@@ -66,10 +66,17 @@ def get_schedule_info():
         consolidated_event_list = []
         for event_list in info:
             for event in event_list:
-                event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
-                                     .replace(tzinfo=pytz.FixedOffset(-300)).timestamp())
+                if event.get('timezoneDependent'):
+                    # Asia time conversion
+                    event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
+                                         .replace(tzinfo=pytz.timezone('Etc/GMT-8')).timestamp())
+                else:
+                    # GMT+5 Conversion
+                    event['start'] = int(datetime.strptime(event['start'], "%Y-%m-%d %H:%M:%S")
+                                         .replace(tzinfo=pytz.timezone('Etc/GMT+5')).timestamp())
+
                 event['end'] = int(datetime.strptime(event['end'], "%Y-%m-%d %H:%M:%S")
-                                   .replace(tzinfo=pytz.FixedOffset(-300)).timestamp())
+                                   .replace(tzinfo=pytz.timezone('Etc/GMT+5')).timestamp())
                 consolidated_event_list.append(event)
 
         cache.set(cache_key, consolidated_event_list, expire=3600)  # 1 hr cache
