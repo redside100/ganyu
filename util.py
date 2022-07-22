@@ -26,6 +26,8 @@ GANYU_COLORS = {
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
 PAIMON_MOE_URL_BASE = 'https://paimon.moe'
 PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
+# Subject to change (if paimon.moe updates its location)
+TIMELINE_REGEX = '/_app/immutable/chunks/timeline-\\w+.js'
 
 PRIMO_EMOJI = '<:primogem:935934046029115462>'
 MORA_EMOJI = '<:mora:935934436594286652>'
@@ -87,7 +89,7 @@ def get_schedule_info():
 
 def get_paimon_moe_timeline_js():
     res = requests.get(f'{PAIMON_MOE_URL_BASE}/timeline/')
-    matches = re.findall("/client/timeline.\\w+.js", res.text)
+    matches = re.findall(TIMELINE_REGEX, res.text)
     if len(matches) > 0:
         return matches[0]
     else:
