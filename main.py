@@ -168,6 +168,9 @@ async def status(interaction: Interaction):
         embed = create_message_embed("You need to enable Real-Time Notes in your HoyoLab privacy settings to use this!")
         embed.set_image(url=util.SETTINGS_IMG_URL)
         await interaction.edit_original_message(embed=embed)
+    except Exception:
+        embed = create_message_embed("Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
+        await interaction.edit_original_message(embed=embed)
 
 
 @bot.slash_command(name='schedule', description='Shows current or upcoming events.')
@@ -232,7 +235,7 @@ async def income(interaction: Interaction):
         await interaction.edit_original_message(embed=pages[0], view=view)
 
     except Exception:
-        embed = create_message_embed("Something went wrong...")
+        embed = create_message_embed("Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
         await interaction.edit_original_message(embed=embed)
 
 

@@ -26,6 +26,8 @@ GANYU_COLORS = {
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
 PAIMON_MOE_URL_BASE = 'https://paimon.moe'
 PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
+# Subject to change (if paimon.moe updates its location)
+TIMELINE_REGEX = '/_app/immutable/chunks/timeline-\\w+.js'
 
 PRIMO_EMOJI = '<:primogem:935934046029115462>'
 MORA_EMOJI = '<:mora:935934436594286652>'
@@ -87,7 +89,7 @@ def get_schedule_info():
 
 def get_paimon_moe_timeline_js():
     res = requests.get(f'{PAIMON_MOE_URL_BASE}/timeline/')
-    matches = re.findall("/client/timeline.\\w+.js", res.text)
+    matches = re.findall(TIMELINE_REGEX, res.text)
     if len(matches) > 0:
         return matches[0]
     else:
@@ -148,16 +150,16 @@ def create_status_embed(notes: Notes, avatar_url):
     embed.set_thumbnail(url=avatar_url)
     embed.add_field(name="Commissions", value=f"{notes.completed_commissions}/{notes.max_commissions} Finished", inline=False)
     cur_time = time.time()
-    recover_time = int(cur_time + notes.remaining_resin_recovery_time)
+    recover_time = int(cur_time + notes.remaining_resin_recovery_time.total_seconds())
     embed.add_field(name="Resin", value=f"{notes.current_resin}/{notes.max_resin}\nFull <t:{recover_time}:R>")
-    realm_currency_time = int(cur_time + notes.remaining_realm_currency_recovery_time)
+    realm_currency_time = int(cur_time + notes.remaining_realm_currency_recovery_time.total_seconds())
     embed.add_field(name="Realm Currency", value=f"{notes.current_realm_currency}/{notes.max_realm_currency}"
                                                  f"\nFull <t:{realm_currency_time}:R>")
     expeditions = []
     for expedition in notes.expeditions:
         exp_str = expedition.character.name + " - `" + str(expedition.status) + "`"
         if not expedition.finished:
-            exp_str += f' (Finishing <t:{int(time.time() + expedition.remaining_time)}:R>)'
+            exp_str += f' (Finishing <t:{int(cur_time + expedition.remaining_time.total_seconds())}:R>)'
 
         expeditions.append(exp_str)
 
