@@ -310,7 +310,7 @@ async def ganyu_status(interaction: Interaction):
     bot_accounts = len(settings['accounts'])
     log_channel_id = settings.get('log_channel')
 
-    embed = nextcord.Embed(title=f"{util.EMOJI_SNOWFLAKE} Ganyu Status")
+    embed = nextcord.Embed(title=f"Ganyu Status")
     embed.add_field(name="Linked Users", value=user_count)
     embed.add_field(name="Bot Accounts", value=bot_accounts)
     if log_channel_id:
