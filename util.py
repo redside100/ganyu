@@ -273,6 +273,7 @@ def create_code_announcement_embed(code: str):
     embed = nextcord.Embed(title=f'Redemption Code', description=f'Code: `{code}`\nClick below to automatically redeem!')
     embed.set_thumbnail(url=PRIMO_IMG_URL)
     embed.colour = GANYU_COLORS['dark']
+    embed.set_footer(text='The redeem button will stop working after 48 hours.')
     return embed
 
 
@@ -365,7 +366,7 @@ class MessageBook(View):
 
 class CodeAnnouncement(View):
     def __init__(self, code: str):
-        super().__init__(timeout=86400)
+        super().__init__(timeout=86400 * 2)
         self.code = code
 
     @nextcord.ui.button(label="Redeem", style=nextcord.ButtonStyle.blurple)
