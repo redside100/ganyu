@@ -6,9 +6,11 @@ import time
 from datetime import datetime, timezone
 from typing import List
 
+import genshin
 import requests
 import pytz
 from apscheduler.triggers.cron import CronTrigger
+from genshin import Client, RedemptionInvalid, RedemptionClaimed, InvalidCookies, RedemptionCooldown
 from genshin.models import Notes
 from genshin.models.genshin.diary import Diary
 from nextcord import Interaction, Embed
@@ -24,6 +26,7 @@ GANYU_COLORS = {
     'dark': 0x505ea9
 }
 SETTINGS_IMG_URL = 'https://i.imgur.com/cOvCeqF.png'
+PRIMO_IMG_URL = 'https://i.imgur.com/6NhUURa.png'
 PAIMON_MOE_URL_BASE = 'https://paimon.moe'
 PAIMON_MOE_EVENT_IMG_BASE = 'https://paimon.moe/images/events'
 # Subject to change (if paimon.moe updates its location)
@@ -266,6 +269,13 @@ def create_report_breakdown_embed(data: Diary, avatar_url):
     return embed
 
 
+def create_code_announcement_embed(code: str):
+    embed = nextcord.Embed(title=f'Redemption Code', description=f'Code: `{code}`\nClick below to automatically redeem!')
+    embed.set_thumbnail(url=PRIMO_IMG_URL)
+    embed.colour = GANYU_COLORS['dark']
+    return embed
+
+
 def create_message_embed(message, color=GANYU_COLORS['dark'], thumbnail=None):
     embed = nextcord.Embed(description=message)
     embed.colour = color
@@ -282,7 +292,7 @@ def loading_embed():
 
 
 class ProfileChoices(View):
-    def __init__(self, user_id, user_name, user_avatar, base_interaction: Interaction):
+    def __init__(self, user_id, user_name, user_avatar, need_code_setup, base_interaction: Interaction):
         super().__init__(timeout=120)
         self.base_interaction: Interaction = base_interaction
         self.user_avatar = user_avatar
@@ -295,12 +305,14 @@ class ProfileChoices(View):
             return
 
         user_data = db.get_link_entry(self.user_id)
+        need_code_setup = user_data['account_id'] is None or user_data['cookie_token'] is None
         if not user_data:
             self.stop()
 
         db.set_daily_reward(self.user_id, not user_data['daily_reward'])
         user_settings = {
-            'Auto Check-in': 'No' if not user_data['daily_reward'] == 0 else 'Yes'
+            'Auto Check-in': 'No' if not user_data['daily_reward'] == 0 else 'Yes',
+            'Can Redeem Codes': 'No' if need_code_setup else 'Yes'
         }
         embed = create_profile_card_embed(self.user_name, self.user_avatar, user_data['uid'], user_settings)
         await self.base_interaction.edit_original_message(embed=embed)
@@ -351,3 +363,56 @@ class MessageBook(View):
         await self.base_interaction.edit_original_message(embed=self.pages[self.current_page])
 
 
+class CodeAnnouncement(View):
+    def __init__(self, code: str):
+        super().__init__(timeout=86400)
+        self.code = code
+
+    @nextcord.ui.button(label="Redeem", style=nextcord.ButtonStyle.blurple)
+    async def redeem(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+        discord_id = interaction.user.id
+        user_data = db.get_link_entry(discord_id)
+        if not user_data:
+            await interaction.response.send_message(embed=create_message_embed(
+                "You don't have an account linked.",
+                GANYU_COLORS['dark']
+            ), ephemeral=True)
+            return
+
+        need_code_setup = user_data['account_id'] is None or user_data['cookie_token'] is None
+        if need_code_setup:
+            await interaction.response.send_message(embed=create_message_embed(
+                "You need to add additional authentication cookies to redeem codes.\n"
+                "Log into https://genshin.hoyoverse.com/en/gift, find `account_id` and `cookie_token`,"
+                " then use `/linkcode`.", color=GANYU_COLORS['dark']), ephemeral=True)
+            return
+
+        user_client = Client({
+            'ltuid': user_data['ltuid'],
+            'ltoken': user_data['ltoken'],
+            'account_id': user_data['account_id'],
+            'cookie_token': user_data['cookie_token']
+        })
+
+        user_client.default_game = genshin.Game.GENSHIN
+        # Using API takes time, keep interaction alive by sending a "loading" response
+        await interaction.response.send_message(embed=loading_embed(), ephemeral=True)
+        try:
+            await user_client.redeem_code(self.code)
+            await interaction.edit_original_message(
+                embed=create_message_embed(f"Successfully claimed code `{self.code}`!"))
+        except RedemptionInvalid:
+            await interaction.edit_original_message(embed=create_message_embed(f"Invalid code `{self.code}`!",
+                                                                                    color=GANYU_COLORS['dark']))
+        except RedemptionClaimed:
+            await interaction.edit_original_message(
+                embed=create_message_embed(f"You've already redeemed `{self.code}`!",
+                                                color=GANYU_COLORS['dark']))
+        except RedemptionCooldown:
+            await interaction.edit_original_message(embed=create_message_embed(
+                "Please wait a bit before redeeming again."
+            ))
+        except InvalidCookies:
+            embed = create_message_embed("Something went wrong... if you changed your password recently,"
+                                         " you will have to relink with new cookies.")
+            await interaction.edit_original_message(embed=embed)

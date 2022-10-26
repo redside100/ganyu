@@ -8,13 +8,14 @@ import nextcord
 from nextcord import Interaction
 from nextcord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
+import traceback
 import db
 from diskcache import Cache
 
 import util
 from genshin.client import MultiCookieClient, Client
-from genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic
+from genshin.errors import InvalidCookies, GenshinException, AlreadyClaimed, DataNotPublic, RedemptionInvalid, \
+    RedemptionClaimed, RedemptionCooldown
 from util import create_message_embed, create_link_profile_embed, GANYU_COLORS, create_profile_card_embed, \
     ProfileChoices, create_reward_embed, create_status_embed, MessageBook
 
@@ -34,22 +35,11 @@ async def ping(interaction: Interaction):
 
 @bot.slash_command(name='link', description='Links a Genshin/Hoyolab account to your Discord user.')
 async def link(interaction: Interaction, ltuid: str, ltoken: str):
-    if interaction.channel.type is not nextcord.ChannelType.private:
-        dm_channel = await interaction.user.create_dm()
-        await dm_channel.send(
-            embed=create_message_embed(
-                "You can only use the link command in DMs with this bot, as it requires you to pass in sensitive "
-                "information.",
-                color=GANYU_COLORS['dark']
-            )
-        )
-        return
-
-    if not len(ltuid) == 9 or not ltuid.isnumeric():
+    if not ltuid.isnumeric():
         await interaction.response.send_message(embed=create_message_embed(
-            "Invalid ltuid (must be 9 digits)!",
+            "Invalid ltuid (must a number)!",
             GANYU_COLORS['dark']
-        ))
+        ), ephemeral=True)
         return
 
     user_client = Client({
@@ -58,7 +48,7 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
     })
     user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
-    await interaction.response.send_message(embed=util.loading_embed())
+    await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
     try:
         accounts = await user_client.genshin_accounts()
         if len(accounts) > 0:
@@ -93,6 +83,53 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
         ))
 
 
+@bot.slash_command(name='linkcode', description='Adds additional authentication cookies in order to redeem codes.')
+async def link_code(interaction: Interaction, account_id: str, cookie_token: str):
+    discord_id = interaction.user.id
+    user_data = db.get_link_entry(discord_id)
+    if user_data:
+        if not account_id.isnumeric():
+            await interaction.response.send_message(embed=create_message_embed(
+                "Invalid account id (must be a number)!",
+                GANYU_COLORS['dark']
+            ), ephemeral=True)
+            return
+
+        user_client = Client({
+            'ltuid': user_data['ltuid'],
+            'ltoken': user_data['ltoken'],
+            'account_id': account_id,
+            'cookie_token': cookie_token
+        })
+
+        user_client.default_game = genshin.Game.GENSHIN
+        # Using API takes time, keep interaction alive by sending a "loading" response
+        await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
+        try:
+            await user_client.redeem_code('TestCode')
+        except RedemptionInvalid:
+            db.set_account_id(discord_id, account_id)
+            db.set_cookie_token(discord_id, cookie_token)
+            await interaction.edit_original_message(embed=create_message_embed(
+                "Successfully added extra authentication cookies.\nYou can now redeem codes!"
+            ))
+        except RedemptionCooldown:
+            await interaction.edit_original_message(embed=create_message_embed(
+                "Please wait a bit before trying again."
+            ))
+        except InvalidCookies:
+            await interaction.edit_original_message(embed=create_message_embed(
+                "Invalid auth cookies!",
+                GANYU_COLORS['dark']
+            ))
+
+    else:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You don't have an account linked.",
+            GANYU_COLORS['dark']
+        ))
+
+
 @bot.slash_command(name='profile', description='Shows information about your linked user.')
 async def profile(interaction: Interaction):
     discord_id = interaction.user.id
@@ -100,11 +137,13 @@ async def profile(interaction: Interaction):
     avatar_url = interaction.user.avatar.url
     user_data = db.get_link_entry(discord_id)
     if user_data:
+        need_code_setup = user_data['account_id'] is None or user_data['cookie_token'] is None
         user_settings = {
-            'Auto Check-in': 'No' if user_data['daily_reward'] == 0 else 'Yes'
+            'Auto Check-in': 'No' if user_data['daily_reward'] == 0 else 'Yes',
+            'Can Redeem Codes': 'No' if need_code_setup else 'Yes'
         }
         embed = create_profile_card_embed(discord_name, avatar_url, user_data['uid'], user_settings)
-        view = ProfileChoices(discord_id, discord_name, avatar_url, interaction)
+        view = ProfileChoices(discord_id, discord_name, avatar_url, need_code_setup, interaction)
         await interaction.response.send_message(embed=embed, view=view)
     else:
         await interaction.response.send_message(embed=create_message_embed(
@@ -169,7 +208,9 @@ async def status(interaction: Interaction):
         embed.set_image(url=util.SETTINGS_IMG_URL)
         await interaction.edit_original_message(embed=embed)
     except Exception:
-        embed = create_message_embed("Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
+        traceback.print_exc()
+        embed = create_message_embed(
+            "Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
         await interaction.edit_original_message(embed=embed)
 
 
@@ -235,8 +276,75 @@ async def income(interaction: Interaction):
         await interaction.edit_original_message(embed=pages[0], view=view)
 
     except Exception:
-        embed = create_message_embed("Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
+        traceback.print_exc()
+        embed = create_message_embed(
+            "Something went wrong... if you changed your password recently, you will have to relink with new cookies.")
         await interaction.edit_original_message(embed=embed)
+
+
+@bot.slash_command(name='redeem', description='Attempts to redeem a code.')
+async def redeem(interaction: Interaction, code: str):
+    discord_id = interaction.user.id
+    user_data = db.get_link_entry(discord_id)
+    if not user_data:
+        await interaction.response.send_message(embed=create_message_embed(
+            "You don't have an account linked.",
+            GANYU_COLORS['dark']
+        ))
+        return
+
+    need_code_setup = user_data['account_id'] is None or user_data['cookie_token'] is None
+    if need_code_setup:
+        await interaction.response.send_message(embed=util.create_message_embed(
+            "You need to add additional authentication cookies to redeem codes.\n"
+            "Log into https://genshin.hoyoverse.com/en/gift, find `account_id` and `cookie_token`,"
+            " then use `/linkcode`.", color=GANYU_COLORS['dark']))
+        return
+
+    user_client = Client({
+        'ltuid': user_data['ltuid'],
+        'ltoken': user_data['ltoken'],
+        'account_id': user_data['account_id'],
+        'cookie_token': user_data['cookie_token']
+    })
+
+    user_client.default_game = genshin.Game.GENSHIN
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
+    try:
+        await user_client.redeem_code(code)
+        await interaction.edit_original_message(embed=util.create_message_embed(f"Successfully claimed code `{code}`!"))
+    except RedemptionInvalid:
+        await interaction.edit_original_message(embed=util.create_message_embed(f"Invalid code `{code}`!",
+                                                                                color=GANYU_COLORS['dark']))
+    except RedemptionClaimed:
+        await interaction.edit_original_message(embed=util.create_message_embed(f"You've already redeemed `{code}`!",
+                                                                                color=GANYU_COLORS['dark']))
+    except RedemptionCooldown:
+        await interaction.edit_original_message(embed=create_message_embed(
+            "Please wait a bit before redeeming again."
+        ))
+    except InvalidCookies:
+        embed = create_message_embed("Something went wrong... if you changed your password recently,"
+                                     " you will have to relink with new cookies.")
+        await interaction.edit_original_message(embed=embed)
+
+
+@bot.slash_command(name='announcecode', description='Announces a code for easy redemption.')
+async def announce_code(interaction: Interaction, code: str):
+    if interaction.channel.type is nextcord.ChannelType.private:
+        await interaction.response.send_message(embed=util.create_message_embed("This can only be used in servers.",
+                                                                                color=GANYU_COLORS['dark']))
+        return
+
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message(embed=util.create_message_embed("You need the `Manage Messages` "
+                                                                                "permission to use this command!",
+                                                                                color=GANYU_COLORS['dark']))
+        return
+
+    await interaction.response.send_message(view=util.CodeAnnouncement(code),
+                                            embed=util.create_code_announcement_embed(code))
 
 
 @bot.slash_command(name='log', description='Ganyu mod usage only.')
@@ -386,8 +494,8 @@ async def on_ready():
     init()
     scheduler.start()
     logging.info(util.get_scheduler_jobs(scheduler))
-    await bot.associate_application_commands()
-    await bot.delete_unknown_application_commands()
+    await bot.discover_application_commands()
+    await bot.sync_all_application_commands()
 
 
 def init():

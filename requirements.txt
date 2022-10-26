@@ -15,7 +15,7 @@ cryptography==36.0.1
 demjson==2.2.4
 diskcache==5.4.0
 frozenlist==1.3.0
-genshin==1.2.1
+genshin==1.3.0
 idna==3.3
 importlib-metadata==4.10.1
 iniconfig==1.1.1
@@ -23,7 +23,7 @@ jeepney==0.7.1
 keyring==23.5.0
 lz4==3.1.10
 multidict==5.2.0
-nextcord==2.0.0a6
+nextcord==2.2.0
 nextcord-ext-menus==1.3.4
 packaging==21.3
 pbkdf2==1.3
@@ -44,7 +44,7 @@ SecretStorage==3.3.1
 six==1.16.0
 toml==0.10.2
 typer==0.4.0
-typing-extensions==4.0.1
+typing-extensions==4.4.0
 tzdata==2021.5
 tzlocal==4.1
 urllib3==1.26.8

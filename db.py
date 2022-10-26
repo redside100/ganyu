@@ -19,12 +19,27 @@ def get_cursor():
 
 
 def update_link_entry(discord_id, uid, ltuid, ltoken, daily_reward=False):
-    get_cursor().execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?) on conflict(discord_id) do"
+    get_cursor().execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?, NULL, NULL) on conflict(discord_id) do"
                          " UPDATE SET uid = excluded.uid, ltuid = excluded.ltuid, ltoken = excluded.ltoken, "
                          "daily_reward = excluded.daily_reward",
                          (discord_id, uid, ltuid, ltoken, daily_reward))
     con.commit()
 
+
+def set_account_id(discord_id, uid):
+    get_cursor().execute("UPDATE user_data SET account_id = :value WHERE discord_id = :discord_id", {
+        'value': uid,
+        'discord_id': discord_id
+    })
+    con.commit()
+
+
+def set_cookie_token(discord_id, cookie_token):
+    get_cursor().execute("UPDATE user_data SET cookie_token = :value WHERE discord_id = :discord_id", {
+        'value': cookie_token,
+        'discord_id': discord_id
+    })
+    con.commit()
 
 def set_daily_reward(discord_id, value):
     get_cursor().execute("UPDATE user_data SET daily_reward = :value WHERE discord_id = :discord_id", {
