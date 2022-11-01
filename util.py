@@ -368,9 +368,14 @@ class CodeAnnouncement(View):
     def __init__(self, code: str):
         super().__init__(timeout=86400 * 2)
         self.code = code
+        redeem_button = nextcord.ui.Button(label="Redeem", style=nextcord.ButtonStyle.blurple)
+        redeem_button.callback = self.redeem
+        manual_redeem_button = nextcord.ui.Button(label="Redeem Manually", style=nextcord.ButtonStyle.link,
+                                                  url=f"https://genshin.hoyoverse.com/en/gift?code={code}")
+        self.add_item(redeem_button)
+        self.add_item(manual_redeem_button)
 
-    @nextcord.ui.button(label="Redeem", style=nextcord.ButtonStyle.blurple)
-    async def redeem(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+    async def redeem(self, interaction: nextcord.Interaction):
         discord_id = interaction.user.id
         user_data = db.get_link_entry(discord_id)
         if not user_data:

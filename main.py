@@ -343,6 +343,11 @@ async def announce_code(interaction: Interaction, code: str):
                                                                                 color=GANYU_COLORS['dark']))
         return
 
+    if len(code.split(' ')) > 1:
+        await interaction.response.send_message(
+            embed=util.create_message_embed("The code needs to be one continuous string."), ephemeral=True)
+        return
+
     await interaction.response.send_message(view=util.CodeAnnouncement(code),
                                             embed=util.create_code_announcement_embed(code))
 
