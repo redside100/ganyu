@@ -299,23 +299,30 @@ class ProfileChoices(View):
         self.user_avatar = user_avatar
         self.user_name = user_name
         self.user_id = user_id
+        self.user_data = db.get_link_entry(self.user_id)
 
-    @nextcord.ui.button(label="Toggle Check-in", style=nextcord.ButtonStyle.blurple)
+        toggle_check_in_button = nextcord.ui.Button(label="Toggle Check-in", style=nextcord.ButtonStyle.blurple)
+        toggle_check_in_button.callback = self.toggle_check_in
+        enka_network_button = nextcord.ui.Button(label="Enka Network", style=nextcord.ButtonStyle.link,
+                                                  url=f"https://enka.network/u/{self.user_data['uid']}")
+        self.add_item(toggle_check_in_button)
+        self.add_item(enka_network_button)
+
     async def toggle_check_in(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
         if not interaction.user.id == self.user_id:
             return
 
-        user_data = db.get_link_entry(self.user_id)
-        need_code_setup = user_data['account_id'] is None or user_data['cookie_token'] is None
-        if not user_data:
+        if not self.user_data:
             self.stop()
 
-        db.set_daily_reward(self.user_id, not user_data['daily_reward'])
+        need_code_setup = self.user_data['account_id'] is None or self.user_data['cookie_token'] is None
+
+        db.set_daily_reward(self.user_id, not self.user_data['daily_reward'])
         user_settings = {
-            'Auto Check-in': 'No' if not user_data['daily_reward'] == 0 else 'Yes',
+            'Auto Check-in': 'No' if not self.user_data['daily_reward'] == 0 else 'Yes',
             'Can Redeem Codes': 'No' if need_code_setup else 'Yes'
         }
-        embed = create_profile_card_embed(self.user_name, self.user_avatar, user_data['uid'], user_settings)
+        embed = create_profile_card_embed(self.user_name, self.user_avatar, self.user_data['uid'], user_settings)
         await self.base_interaction.edit_original_message(embed=embed)
 
 
