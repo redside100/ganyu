@@ -311,7 +311,7 @@ class ProfileChoices(View):
         self.add_item(toggle_check_in_button)
         self.add_item(enka_network_button)
 
-    async def toggle_check_in(self, button: nextcord.ui.Button, interaction: nextcord.Interaction):
+    async def toggle_check_in(self, interaction: nextcord.Interaction):
         if not interaction.user.id == self.user_id:
             return
 
