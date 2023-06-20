@@ -447,6 +447,7 @@ async def ganyu_status(interaction: Interaction):
 
 @scheduler.scheduled_job(util.DAILY_REWARD_CRON_TRIGGER, id='daily_rewards')
 async def auto_collect_daily_rewards():
+
     users = db.get_all_auto_checkin_users()
     settings = util.get_settings()
     log_channel_id = settings.get('log_channel')
@@ -456,8 +457,13 @@ async def auto_collect_daily_rewards():
         channel = bot.get_channel(log_channel_id)
         if channel:
             await channel.send(embed=create_message_embed(
-                f"Collecting daily rewards for {len(users)} user(s)..."
+                "Autoclaiming is disabled due to Geetests.\nManually claim your daily reward [here](https://act.hoyolab.com/ys/event/signin-sea-v3/index.html?act_id=e202102251931481)."
             ))
+            return
+        
+            # await channel.send(embed=create_message_embed(
+            #     f"Collecting daily rewards for {len(users)} user(s)..."
+            # ))
 
     for user_data in users:
         user_client = Client({
