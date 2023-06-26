@@ -151,6 +151,23 @@ async def profile(interaction: Interaction):
             GANYU_COLORS['dark']
         ))
 
+@bot.user_command(name='Get Profile')
+async def get_profile(interaction: Interaction, member: nextcord.Member):
+    target_data = db.get_link_entry(member.id)
+    if not target_data:
+        embed = create_message_embed(f"{member.name} does not have an account linked!")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    need_code_setup = target_data['account_id'] is None or target_data['cookie_token'] is None
+    user_settings = {
+        'Auto Check-in': 'No' if target_data['daily_reward'] == 0 else 'Yes',
+        'Can Redeem Codes': 'No' if need_code_setup else 'Yes'
+    }
+
+    embed = create_profile_card_embed(member.name, member.avatar, target_data['uid'], user_settings)
+    view = ProfileChoices(member.id, member.name, member.avatar, need_code_setup, interaction, probe=True)
+    await interaction.response.send_message(embed=embed, view=view)
+
 
 @bot.slash_command(name='claim', description='Attempt to manually claim your daily reward.')
 async def claim(interaction: Interaction):

@@ -296,7 +296,7 @@ def loading_embed():
 
 
 class ProfileChoices(View):
-    def __init__(self, user_id, user_name, user_avatar, need_code_setup, base_interaction: Interaction):
+    def __init__(self, user_id, user_name, user_avatar, need_code_setup, base_interaction: Interaction, probe=False):
         super().__init__(timeout=120)
         self.base_interaction: Interaction = base_interaction
         self.user_avatar = user_avatar
@@ -308,8 +308,14 @@ class ProfileChoices(View):
         toggle_check_in_button.callback = self.toggle_check_in
         enka_network_button = nextcord.ui.Button(label="Enka Network", style=nextcord.ButtonStyle.link,
                                                   url=f"https://enka.network/u/{self.user_data['uid']}")
-        self.add_item(toggle_check_in_button)
+        akasha_cv_button = nextcord.ui.Button(label="Akasha", style=nextcord.ButtonStyle.link,
+                                                  url=f"https://akasha.cv/profile/{self.user_data['uid']}")
+        if not probe:
+            self.add_item(toggle_check_in_button)
+            
+
         self.add_item(enka_network_button)
+        self.add_item(akasha_cv_button)
 
     async def toggle_check_in(self, interaction: nextcord.Interaction):
         if not interaction.user.id == self.user_id:
@@ -321,8 +327,10 @@ class ProfileChoices(View):
         need_code_setup = self.user_data['account_id'] is None or self.user_data['cookie_token'] is None
 
         db.set_daily_reward(self.user_id, not self.user_data['daily_reward'])
+        self.user_data['daily_reward'] = not self.user_data['daily_reward']
+
         user_settings = {
-            'Auto Check-in': 'No' if not self.user_data['daily_reward'] == 0 else 'Yes',
+            'Auto Check-in': 'No' if self.user_data['daily_reward'] == 0 else 'Yes',
             'Can Redeem Codes': 'No' if need_code_setup else 'Yes'
         }
         embed = create_profile_card_embed(self.user_name, self.user_avatar, self.user_data['uid'], user_settings)
