@@ -562,9 +562,9 @@ async def poll_for_reddit_codes():
                 code = code.strip()[-12:]
                 if f"code_{code}" not in cache:
                     codes.add(code)
-                    cache.set(f"code_{code}", code, expire=3600)
+                    cache.set(f"code_{code}", code, expire=604800) # 1 wk cache for codes (codes shouldn't be reposted though)
 
-        cache.set(cache_key, cache_key, expire=3600)  # 24 hr cache
+        cache.set(cache_key, cache_key, expire=86400)  # 24 hr cache
 
     logging.info(f"Found new reddit codes {codes}")
 
