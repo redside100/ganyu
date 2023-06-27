@@ -24,6 +24,11 @@ Users can claim their daily check-in reward with the bot. The bot also automatic
 claims daily check-in rewards every day from 5:00 - 6:00 UTC for linked users with the auto claim option enabled, which is
 toggleable through `/profile`.
 
+**Update**: Hoyoverse is starting to check bots with Geetests (captcha) on the daily check-in endpoint. For the time being, the auto collect feature is disabled.
+
+### Reddit Code Discovery
+The bot periodically crawls the [/r/Genshin_Impact](https://www.reddit.com/r/Genshin_Impact/) subreddit for redemption codes, and announces them in the specified log channel.
+
 ### Event Schedule
 A standard event schedule obtained from https://paimon.moe.
 
