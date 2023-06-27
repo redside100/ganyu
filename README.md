@@ -2,7 +2,7 @@
 A Discord bot used to query information related to user linked Genshin Impact accounts.
 Built mainly off of thesadru's [genshin.py](https://github.com/thesadru/genshin.py).
 
-![Ganyu](https://i.imgur.com/Z4wnRFJ.jpg)
+![genshin-ganyu-sleeping-512x512](https://github.com/redside100/ganyu/assets/17993728/d6be9c60-72e2-4a0a-84e0-d0a9a32271f5)
 
 ## Features
 ### Account Linking
