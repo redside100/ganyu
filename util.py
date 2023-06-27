@@ -41,6 +41,12 @@ DAILY_REWARD_CRON_TRIGGER = CronTrigger(
     timezone=pytz.UTC,
     jitter=3600  # anytime within that hour
 )
+
+CODE_POLLER_CRON_TRIGGER = CronTrigger(
+    minute='0',
+    timezone=pytz.UTC
+)
+
 cache = Cache("cache")
 
 
@@ -274,6 +280,15 @@ def create_report_breakdown_embed(data: Diary, avatar_url):
 
 def create_code_announcement_embed(code: str):
     embed = nextcord.Embed(title=f'Redemption Code', description=f'Code: `{code}`\nClick below to automatically redeem!')
+    embed.set_thumbnail(url=PRIMO_IMG_URL)
+    embed.colour = GANYU_COLORS['dark']
+    embed.set_footer(text='The redeem button will stop working after 48 hours.')
+    return embed
+
+
+def create_code_discovery_embed(code: str):
+    embed = nextcord.Embed(title=f'New Code Discovered',
+                           description=f'Code: `{code}`\nCan attempt to redeem with the buttons below!')
     embed.set_thumbnail(url=PRIMO_IMG_URL)
     embed.colour = GANYU_COLORS['dark']
     embed.set_footer(text='The redeem button will stop working after 48 hours.')
