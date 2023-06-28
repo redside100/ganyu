@@ -538,9 +538,9 @@ async def poll_for_reddit_codes():
         title = post['data']['title']
         body = post['data']['selftext']
         id = post['data']['id']
-        cache_key = f"reddit_{id}"
-        if cache_key in cache:
-            continue
+        # cache_key = f"reddit_{id}"
+        # if cache_key in cache:
+        #     continue
 
         if code_regex.search(title + "\n" + body) or code_keyword_regex.search(
                 title + "\n" + body) or code_link_regex.search(title + "\n" + body):
@@ -564,7 +564,7 @@ async def poll_for_reddit_codes():
                     codes.add(code)
                     cache.set(f"code_{code}", code, expire=604800) # 1 wk cache for codes (codes shouldn't be reposted though)
 
-        cache.set(cache_key, cache_key, expire=86400) # 24 hr cache
+        # cache.set(cache_key, cache_key, expire=86400) # 24 hr cache
 
     logging.info(f"Found new reddit codes {codes}")
 
