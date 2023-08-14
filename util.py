@@ -168,8 +168,8 @@ def create_status_embed(notes: Notes, avatar_url):
     embed.add_field(name="Realm Currency", value=f"{notes.current_realm_currency}/{notes.max_realm_currency}"
                                                  f"\nFull <t:{realm_currency_time}:R>")
     expeditions = []
-    for expedition in notes.expeditions:
-        exp_str = expedition.character.name + " - `" + str(expedition.status) + "`"
+    for i, expedition in enumerate(notes.expeditions):
+        exp_str = f"Expedition {i + 1} - `{str(expedition.status)}`"
         if not expedition.finished:
             exp_str += f' (Finishing <t:{int(cur_time + expedition.remaining_time.total_seconds())}:R>)'
 

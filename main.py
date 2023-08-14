@@ -286,7 +286,7 @@ async def income(interaction: Interaction):
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
-        diary = await user_client.get_diary()
+        diary = await user_client.get_genshin_diary()
         pages = [
             util.create_report_overview_embed(diary, avatar_url),
             util.create_report_breakdown_embed(diary, avatar_url)
