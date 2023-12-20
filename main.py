@@ -475,14 +475,14 @@ async def auto_collect_daily_rewards():
     if log_channel_id:
         channel = bot.get_channel(log_channel_id)
         if channel:
-            await channel.send(embed=create_message_embed(
-                "Autoclaiming is disabled due to Geetests.\nManually claim your daily reward [here](https://act.hoyolab.com/ys/event/signin-sea-v3/index.html?act_id=e202102251931481)."
-            ))
-            return
-        
+            # Seems like geetests are gone for the time being
             # await channel.send(embed=create_message_embed(
-            #     f"Collecting daily rewards for {len(users)} user(s)..."
+            #     "Autoclaiming is disabled due to Geetests.\nManually claim your daily reward [here](https://act.hoyolab.com/ys/event/signin-sea-v3/index.html?act_id=e202102251931481)."
             # ))
+            # return
+            await channel.send(embed=create_message_embed(
+                f"Collecting daily rewards for {len(users)} user(s)..."
+            ))
 
     for user_data in users:
         user_client = Client({
