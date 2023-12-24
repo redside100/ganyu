@@ -18,7 +18,7 @@ def get_cursor():
     return con.cursor()
 
 
-def update_link_entry(discord_id, uid, ltuid, ltoken, daily_reward=False):
+def update_link_entry(discord_id, uid, ltuid, ltoken, daily_reward=True):
     get_cursor().execute("INSERT INTO user_data VALUES (?, ?, ?, ?, ?, NULL, NULL) on conflict(discord_id) do"
                          " UPDATE SET uid = excluded.uid, ltuid = excluded.ltuid, ltoken = excluded.ltoken, "
                          "daily_reward = excluded.daily_reward",
