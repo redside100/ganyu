@@ -524,8 +524,8 @@ async def poll_for_reddit_codes():
         "User-Agent": "GanyuBot 2.0"
     }
 
-    QUERY_URL = "https://www.reddit.com/r/Genshin_Impact/search.json?q=code&restrict_sr=1&t=day"
-    TEST_URL = "https://www.reddit.com/r/Genshin_Impact/search.json?q=code&restrict_sr=1&t=week"
+    QUERY_URL = "https://old.reddit.com/r/Genshin_Impact/search.json?q=code&restrict_sr=1&t=day"
+    TEST_URL = "https://old.reddit.com/r/Genshin_Impact/search.json?q=code&restrict_sr=1&t=week"
     res = requests.get(QUERY_URL, headers=headers)
     search_data = res.json()
 
