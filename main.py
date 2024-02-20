@@ -452,12 +452,17 @@ async def ganyu_status(interaction: Interaction):
         embed.add_field(name="Log Channel", value=f'<#{log_channel_id}>', inline=False)
     jobs = util.get_scheduler_jobs(scheduler)
     next_timestamp = None
+    next_code_timestamp = None
     for job in jobs:
         if job['id'] == 'daily_rewards':
             next_timestamp = job['next_run_time'].timestamp()
+        if job['id'] == 'code_poller':
+            next_code_timestamp = job['next_run_time'].timestamp()
 
     if next_timestamp:
         embed.add_field(name="Next Reward Collection", value=f'<t:{int(next_timestamp)}:F>', inline=False)
+    if next_code_timestamp:
+        embed.add_field(name="Next Code Poll Time", value=f'<t:{int(next_code_timestamp)}:F>', inline=False)
 
     embed.colour = GANYU_COLORS['dark']
     embed.set_thumbnail(url=bot.user.avatar.url)
