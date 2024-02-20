@@ -521,7 +521,7 @@ async def auto_collect_daily_rewards():
 @scheduler.scheduled_job(util.CODE_POLLER_CRON_TRIGGER, id='code_poller')
 async def poll_for_reddit_codes():
     headers = {
-        "User-Agent": "GanyuBot 2.0"
+        "User-Agent": "GanyuBot 3.0"
     }
 
     QUERY_URL = "https://old.reddit.com/r/Genshin_Impact/search.json?q=code&restrict_sr=1&t=day"

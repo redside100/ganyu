@@ -43,8 +43,9 @@ DAILY_REWARD_CRON_TRIGGER = CronTrigger(
 )
 
 CODE_POLLER_CRON_TRIGGER = CronTrigger(
-    minute='0',
-    timezone=pytz.UTC
+    hour='*/2',
+    timezone=pytz.UTC,
+    jitter=600 # 10 min jitter
 )
 
 cache = Cache("cache")
