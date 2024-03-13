@@ -54,9 +54,20 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
     try:
         accounts = await user_client.genshin_accounts()
         if len(accounts) > 0:
-            uid = accounts[0].uid
-            level = accounts[0].level
-            username = accounts[0].nickname
+            
+            no_na_warning = False
+            na_account = None
+            for account in accounts:
+                if account.server_name == 'America Server':
+                    na_account = account
+
+            if na_account is None:
+                na_account = accounts[0]
+                no_na_warning = True
+
+            uid = na_account.uid
+            level = na_account.level
+            username = na_account.nickname
             discord_id = interaction.user.id
             unlinked_discord_id = None
 
@@ -68,8 +79,13 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
             embed = create_link_profile_embed(discord_id,
                                               interaction.user.avatar.url,
                                               uid, level, username)
+            
+
             if unlinked_discord_id:
-                embed.set_footer(text=f'Warning: Old Discord user unlinked (ID {unlinked_discord_id})')
+                embed.add_field(name="Old Discord User", value=f"<@{unlinked_discord_id}>")
+
+            if no_na_warning:
+                embed.set_footer(text='Warning: No NA account was found, the UID may be incorrect.')
 
             await interaction.edit_original_message(embed=embed)
         else:
