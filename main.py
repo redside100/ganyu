@@ -615,6 +615,7 @@ async def auto_collect_daily_rewards():
                 )
             )
 
+    failed_users = []
     for user_data in users:
         user_client = Client(
             {"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]}
@@ -624,6 +625,7 @@ async def auto_collect_daily_rewards():
             await user_client.claim_daily_reward(reward=False)
             success += 1
         except GenshinException:
+            failed_users.append(user_data["discord_id"])
             pass
 
         await asyncio.sleep(random.randint(0, 2))
@@ -638,6 +640,17 @@ async def auto_collect_daily_rewards():
                     f"Time elapsed: {time_elapsed} second(s)"
                 )
             )
+            if failed_users:
+                failed_text = " ".join(
+                    [f"<@{user_id}>" for user_id in failed_users[:20]]
+                )
+                if len(failed_users) > 20:
+                    failed_text += f" and {len(failed_users) - 20} more..."
+
+                await channel.send(
+                    embed=create_message_embed(f"Failed users: {failed_text}")
+                )
+
             jobs = util.get_scheduler_jobs(scheduler)
             next_timestamp = None
             for job in jobs:
