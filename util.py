@@ -363,9 +363,7 @@ def loading_embed():
 
 
 def create_activity_update_embed(discord_id, uid, db_data, new_data):
-    embed = nextcord.Embed(
-        title="🔵 Activity Update", description=f"<@{discord_id}>"
-    )
+    embed = nextcord.Embed(title="🔵 Activity Update", description=f"<@{discord_id}>")
     fields = [
         ("level", "level", AEP_EMOJI, "Adventure Rank"),
         ("world_level", "worldLevel", "🌎", "World Level"),
