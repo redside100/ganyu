@@ -676,7 +676,7 @@ async def auto_collect_daily_rewards():
                 )
 
 
-@scheduler.scheduled_job(util.CODE_POLLER_CRON_TRIGGER, id="code_poller")
+# @scheduler.scheduled_job(util.CODE_POLLER_CRON_TRIGGER, id="code_poller")
 async def poll_for_reddit_codes():
     headers = {"User-Agent": "GanyuBot 3.0"}
 
