@@ -37,6 +37,9 @@ TIMELINE_REGEX = "/_app/immutable/chunks/timeline-\\w+.js"
 
 PRIMO_EMOJI = "<:primogem:935934046029115462>"
 MORA_EMOJI = "<:mora:935934436594286652>"
+AEP_EMOJI = "<:aep:1249814893897449492>"
+ACHIEVEMENT_EMOJI = "<:achievement:1249814725454467081>"
+ABYSS_EMOJI = "<:abyss:1249817258856026273>"
 
 # Daily reward becomes available at 5 pm UTC
 DAILY_REWARD_CRON_TRIGGER = CronTrigger(
@@ -46,6 +49,9 @@ DAILY_REWARD_CRON_TRIGGER = CronTrigger(
 CODE_POLLER_CRON_TRIGGER = CronTrigger(
     hour="*/2", timezone=pytz.UTC, jitter=600  # 10 min jitter
 )
+
+ACTIVITY_FEED_CRON_TRIGGER = CronTrigger(minute="*/1", timezone=pytz.UTC)  # every 5 min
+ACTIVITY_FEED_CLEANUP_TRIGGER = CronTrigger(hour="0", timezone=pytz.UTC)  # once a day
 
 cache = Cache("cache")
 
@@ -356,6 +362,43 @@ def loading_embed():
     return embed
 
 
+def create_activity_update_embed(discord_id, uid, db_data, new_data):
+    embed = nextcord.Embed(
+        title="🔵 Activity Update", description=f"<@{discord_id}>"
+    )
+    fields = [
+        ("level", "level", AEP_EMOJI, "Adventure Rank"),
+        ("world_level", "worldLevel", "🌎", "World Level"),
+        (
+            "finish_achievement_num",
+            "finishAchievementNum",
+            ACHIEVEMENT_EMOJI,
+            "Achievements",
+        ),
+    ]
+
+    for field in fields:
+        if db_data[field[0]] != new_data[field[1]]:
+            diff = new_data[field[1]] - db_data[field[0]]
+            embed.add_field(
+                name=field[3],
+                value=f"{field[2]} {new_data[field[1]]} *({'+' if diff > 0 else ''}{diff})*",
+            )
+
+    if (
+        db_data["tower_floor_index"] != new_data["towerFloorIndex"]
+        or db_data["tower_level_index"] != new_data["towerLevelIndex"]
+    ):
+        embed.add_field(
+            name="Spiral Abyss",
+            value=f"{ABYSS_EMOJI} {new_data['towerFloorIndex']}-{new_data['towerLevelIndex']} *(from {db_data['tower_floor_index']}-{db_data['tower_level_index']})*",
+        )
+
+    embed.colour = GANYU_COLORS["dark"]
+    embed.set_footer(text=f"UID {uid}")
+    return embed
+
+
 class ProfileChoices(View):
     def __init__(
         self,
@@ -377,6 +420,10 @@ class ProfileChoices(View):
             label="Toggle Check-in", style=nextcord.ButtonStyle.blurple
         )
         toggle_check_in_button.callback = self.toggle_check_in
+        toggle_activity_button = nextcord.ui.Button(
+            label="Toggle Activity Tracking", style=nextcord.ButtonStyle.blurple
+        )
+        toggle_activity_button.callback = self.toggle_activity
         enka_network_button = nextcord.ui.Button(
             label="Enka Network",
             style=nextcord.ButtonStyle.link,
@@ -389,6 +436,7 @@ class ProfileChoices(View):
         )
         if not probe:
             self.add_item(toggle_check_in_button)
+            self.add_item(toggle_activity_button)
 
         self.add_item(enka_network_button)
         self.add_item(akasha_cv_button)
@@ -411,6 +459,32 @@ class ProfileChoices(View):
         user_settings = {
             "Auto Check-in": "No" if self.user_data["daily_reward"] == 0 else "Yes",
             "Can Redeem Codes": "No" if need_code_setup else "Yes",
+            "Track Activity": "No" if self.user_data["track"] == 0 else "Yes",
+        }
+        embed = create_profile_card_embed(
+            self.user_name, self.user_avatar, self.user_data["uid"], user_settings
+        )
+        await self.base_interaction.edit_original_message(embed=embed)
+
+    async def toggle_activity(self, interaction: nextcord.Interaction):
+        if not interaction.user.id == self.user_id:
+            return
+
+        if not self.user_data:
+            self.stop()
+
+        need_code_setup = (
+            self.user_data["account_id"] is None
+            or self.user_data["cookie_token"] is None
+        )
+
+        db.set_activity_tracking(self.user_id, not self.user_data["track"])
+        self.user_data["track"] = not self.user_data["track"]
+
+        user_settings = {
+            "Auto Check-in": "No" if self.user_data["daily_reward"] == 0 else "Yes",
+            "Can Redeem Codes": "No" if need_code_setup else "Yes",
+            "Track Activity": "No" if self.user_data["track"] == 0 else "Yes",
         }
         embed = create_profile_card_embed(
             self.user_name, self.user_avatar, self.user_data["uid"], user_settings

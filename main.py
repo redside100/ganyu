@@ -26,6 +26,7 @@ from genshin.errors import (
     RedemptionCooldown,
 )
 from util import (
+    create_activity_update_embed,
     create_message_embed,
     create_link_profile_embed,
     GANYU_COLORS,
@@ -195,6 +196,7 @@ async def profile(interaction: Interaction):
         user_settings = {
             "Auto Check-in": "No" if user_data["daily_reward"] == 0 else "Yes",
             "Can Redeem Codes": "No" if need_code_setup else "Yes",
+            "Track Activity": "No" if user_data["track"] == 0 else "Yes",
         }
         embed = create_profile_card_embed(
             discord_name, avatar_url, user_data["uid"], user_settings
@@ -569,11 +571,14 @@ async def ganyu_status(interaction: Interaction):
     jobs = util.get_scheduler_jobs(scheduler)
     next_timestamp = None
     next_code_timestamp = None
+    next_activity_feed_timestamp = None
     for job in jobs:
         if job["id"] == "daily_rewards":
             next_timestamp = job["next_run_time"].timestamp()
         if job["id"] == "code_poller":
             next_code_timestamp = job["next_run_time"].timestamp()
+        if job["id"] == "activity_feed_update":
+            next_activity_feed_timestamp = job["next_run_time"].timestamp()
 
     if next_timestamp:
         embed.add_field(
@@ -585,6 +590,12 @@ async def ganyu_status(interaction: Interaction):
         embed.add_field(
             name="Next Code Poll Time",
             value=f"<t:{int(next_code_timestamp)}:F>",
+            inline=False,
+        )
+    if next_activity_feed_timestamp:
+        embed.add_field(
+            name="Next Activity Feed Update",
+            value=f"<t:{int(next_activity_feed_timestamp)}:F>",
             inline=False,
         )
 
@@ -735,6 +746,61 @@ async def poll_for_reddit_codes():
                     view=util.CodeAnnouncement(code),
                     embed=util.create_code_discovery_embed(code),
                 )
+
+
+@scheduler.scheduled_job(util.ACTIVITY_FEED_CRON_TRIGGER, id="activity_feed_update")
+async def poll_enka():
+
+    users = db.get_all_tracked_users()
+
+    settings = util.get_settings()
+    log_channel_id = settings.get("log_channel")
+    channel = None
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+
+    for user in users:
+
+        uid = user["uid"]
+        last_activity = db.get_latest_activity(user["discord_id"])
+
+        headers = {"User-Agent": "GanyuBot 3.0"}
+
+        try:
+            res = requests.get(
+                f"https://enka.network/api/uid/{uid}?info", headers=headers
+            )
+            enka_data = res.json()
+            db.log_activity(user["discord_id"], enka_data)
+            if last_activity and channel:
+                player_info = enka_data["playerInfo"]
+                if (
+                    last_activity["level"] != player_info["level"]
+                    or last_activity["world_level"] != player_info["worldLevel"]
+                    or last_activity["finish_achievement_num"]
+                    != player_info["finishAchievementNum"]
+                    or last_activity["tower_floor_index"]
+                    != player_info["towerFloorIndex"]
+                    or last_activity["tower_level_index"]
+                    != player_info["towerLevelIndex"]
+                ):
+                    embed = create_activity_update_embed(
+                        user["discord_id"], uid, last_activity, player_info
+                    )
+                    await channel.send(embed=embed)
+        except Exception:
+            import traceback
+
+            logging.info(f"Error while fetching enka data for uid {uid}; skipping")
+            traceback.print_exc()
+
+        # sleep to not spam enka api and get rate limited
+        await asyncio.sleep(2)
+
+
+@scheduler.scheduled_job(util.ACTIVITY_FEED_CLEANUP_TRIGGER, id="activity_feed_cleanup")
+async def cleanup_activities():
+    db.purge_activities()
 
 
 @bot.event

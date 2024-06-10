@@ -1,5 +1,6 @@
 import sqlite3
 import base64
+import time
 from util import dict_factory
 
 cur = None
@@ -53,6 +54,14 @@ def set_daily_reward(discord_id, value):
     con.commit()
 
 
+def set_activity_tracking(discord_id, value):
+    get_cursor().execute(
+        "UPDATE user_data SET track = :value WHERE discord_id = :discord_id",
+        {"value": value, "discord_id": discord_id},
+    )
+    con.commit()
+
+
 def get_link_entry(discord_id):
     data = (
         get_cursor()
@@ -73,6 +82,23 @@ def get_all_auto_checkin_users():
         get_cursor()
         .execute("SELECT * FROM user_data WHERE daily_reward = TRUE")
         .fetchall()
+    )
+    return data
+
+
+def get_all_tracked_users():
+    data = get_cursor().execute("SELECT * FROM user_data WHERE track = TRUE").fetchall()
+    return data
+
+
+def get_latest_activity(discord_id):
+    data = (
+        get_cursor()
+        .execute(
+            "SELECT * FROM user_activity WHERE discord_id = :discord_id ORDER BY timestamp DESC limit 1",
+            {"discord_id": discord_id},
+        )
+        .fetchone()
     )
     return data
 
@@ -108,3 +134,26 @@ def user_count():
         .fetchone()["linked"]
     )
     return data
+
+
+def log_activity(discord_id, enka_response):
+    player_info = enka_response["playerInfo"]
+    get_cursor().execute(
+        "INSERT INTO user_activity VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            discord_id,
+            player_info["level"],
+            player_info["worldLevel"],
+            player_info["finishAchievementNum"],
+            player_info["towerFloorIndex"],
+            player_info["towerLevelIndex"],
+            int(time.time()),
+        ),
+    )
+    con.commit()
+
+
+def purge_activities():
+    time_thres = int(time.time() * 1000) - (86400 * 30 * 1000)
+    get_cursor().execute(f"DELETE FROM user_activity WHERE timestamp < {time_thres}")
+    con.commit()
