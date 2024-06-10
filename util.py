@@ -50,7 +50,7 @@ CODE_POLLER_CRON_TRIGGER = CronTrigger(
     hour="*/2", timezone=pytz.UTC, jitter=600  # 10 min jitter
 )
 
-ACTIVITY_FEED_CRON_TRIGGER = CronTrigger(minute="*/1", timezone=pytz.UTC)  # every 5 min
+ACTIVITY_FEED_CRON_TRIGGER = CronTrigger(minute="*/5", timezone=pytz.UTC)  # every 5 min
 ACTIVITY_FEED_CLEANUP_TRIGGER = CronTrigger(hour="0", timezone=pytz.UTC)  # once a day
 
 cache = Cache("cache")
