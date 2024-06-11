@@ -154,6 +154,6 @@ def log_activity(discord_id, enka_response):
 
 
 def purge_activities():
-    time_thres = int(time.time() * 1000) - (86400 * 30 * 1000)
+    time_thres = int(time.time()) - (86400 * 30)
     get_cursor().execute(f"DELETE FROM user_activity WHERE timestamp < {time_thres}")
     con.commit()
