@@ -632,3 +632,15 @@ class CodeAnnouncement(View):
                 " you will have to relink with new cookies."
             )
             await interaction.edit_original_message(embed=embed)
+
+
+def get_client(ltuid: str, ltoken: str, is_genshin=True) -> Client:
+    if ltoken.startswith("v2"):
+        client = Client({"ltuid_v2": ltuid, "ltoken_v2": ltoken})
+    else:
+        client = Client({"ltuid": ltuid, "ltoken": ltoken})
+
+    if is_genshin:
+        client.default_game = genshin.Game.GENSHIN
+
+    return client

@@ -35,6 +35,7 @@ from util import (
     create_reward_embed,
     create_status_embed,
     MessageBook,
+    get_client,
 )
 
 logging.basicConfig()
@@ -64,8 +65,7 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
         )
         return
 
-    user_client = Client({"ltuid": ltuid, "ltoken": ltoken})
-    user_client.default_game = genshin.Game.GENSHIN
+    user_client = get_client(ltuid, ltoken)
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
     try:
@@ -153,8 +153,7 @@ async def link_alt(interaction: Interaction, ltuid: str, ltoken: str, name: str)
         )
         return
 
-    user_client = Client({"ltuid": ltuid, "ltoken": ltoken})
-    user_client.default_game = genshin.Game.GENSHIN
+    user_client = get_client(ltuid, ltoken)
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
     try:
@@ -258,16 +257,9 @@ async def link_code(interaction: Interaction, account_id: str, cookie_token: str
             )
             return
 
-        user_client = Client(
-            {
-                "ltuid": user_data["ltuid"],
-                "ltoken": user_data["ltoken"],
-                "account_id": account_id,
-                "cookie_token": cookie_token,
-            }
-        )
+        user_client = get_client(user_data["ltuid"], user_data["ltoken"])
+        user_client.set_cookies(account_id=account_id, cookie_token=cookie_token)
 
-        user_client.default_game = genshin.Game.GENSHIN
         # Using API takes time, keep interaction alive by sending a "loading" response
         await interaction.response.send_message(
             embed=util.loading_embed(), ephemeral=True
@@ -371,8 +363,7 @@ async def claim(interaction: Interaction):
         )
         return
 
-    user_client = Client({"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]})
-    user_client.default_game = genshin.Game.GENSHIN
+    user_client = get_client(user_data["ltuid"], user_data["ltoken"])
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -404,8 +395,7 @@ async def status(interaction: Interaction):
         )
         return
 
-    user_client = Client({"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]})
-    user_client.default_game = genshin.Game.GENSHIN
+    user_client = get_client(user_data["ltuid"], user_data["ltoken"])
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -479,8 +469,7 @@ async def income(interaction: Interaction):
             )
         )
         return
-    user_client = Client({"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]})
-    user_client.default_game = genshin.Game.GENSHIN
+    user_client = get_client(user_data["ltuid"], user_data["ltoken"])
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -526,16 +515,11 @@ async def redeem(interaction: Interaction, code: str):
         )
         return
 
-    user_client = Client(
-        {
-            "ltuid": user_data["ltuid"],
-            "ltoken": user_data["ltoken"],
-            "account_id": user_data["account_id"],
-            "cookie_token": user_data["cookie_token"],
-        }
+    user_client = get_client(user_data["ltuid"], user_data["ltoken"])
+    user_client.set_browser_cookies(
+        account_id=user_data["account_id"], cookie_token=user_data["cookie_token"]
     )
 
-    user_client.default_game = genshin.Game.GENSHIN
     # Using API takes time, keep interaction alive by sending a "loading" response
     await interaction.response.send_message(embed=util.loading_embed())
     try:
@@ -776,10 +760,7 @@ async def auto_collect_daily_rewards():
 
     failed_users = []
     for user_data in users:
-        user_client = Client(
-            {"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]}
-        )
-        user_client.default_game = genshin.Game.GENSHIN
+        user_client = get_client(user_data["ltuid"], user_data["ltoken"])
         try:
             await user_client.claim_daily_reward(reward=False)
             success += 1
@@ -790,10 +771,7 @@ async def auto_collect_daily_rewards():
 
     failed_alt_users = []
     for user_data in alt_users:
-        user_client = Client(
-            {"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]}
-        )
-        user_client.default_game = genshin.Game.GENSHIN
+        user_client = get_client(user_data["ltuid"], user_data["ltoken"])
         try:
             await user_client.claim_daily_reward(reward=False)
             success += 1
