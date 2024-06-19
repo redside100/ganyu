@@ -1,5 +1,5 @@
 import sqlite3
-import base64
+import uuid
 import time
 from util import dict_factory
 
@@ -22,12 +22,54 @@ def get_cursor():
 
 def update_link_entry(discord_id, uid, ltuid, ltoken, daily_reward=True):
     get_cursor().execute(
-        "INSERT INTO user_data VALUES (?, ?, ?, ?, ?, NULL, NULL) on conflict(discord_id) do"
+        "INSERT INTO user_data VALUES (?, ?, ?, ?, ?, NULL, NULL, TRUE) on conflict(discord_id) do"
         " UPDATE SET uid = excluded.uid, ltuid = excluded.ltuid, ltoken = excluded.ltoken, "
         "daily_reward = excluded.daily_reward",
         (discord_id, uid, ltuid, ltoken, daily_reward),
     )
     con.commit()
+
+
+def create_alt_entry(name, uid, ltuid, ltoken):
+    get_cursor().execute(
+        "INSERT INTO alt_data VALUES (?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), name, uid, ltuid, ltoken),
+    )
+    con.commit()
+
+
+def delete_alt_entry(uuid):
+    get_cursor().execute("DELETE FROM alt_data WHERE id = :id", {"id": uuid})
+    con.commit()
+
+
+def get_alt_data(uuid):
+    data = (
+        get_cursor()
+        .execute("SELECT * FROM alt_data WHERE id = :id", {"id": uuid},)
+        .fetchone()
+    )
+    if data:
+        return data
+
+    return None
+
+
+def get_all_alts():
+    data = get_cursor().execute("SELECT * FROM alt_data").fetchall()
+    return data
+
+
+def alt_uid_exists(uid):
+    data = (
+        get_cursor()
+        .execute("SELECT * FROM alt_data WHERE uid = :uid", {"uid": uid},)
+        .fetchone()
+    )
+    if data:
+        return data["id"]
+    else:
+        return False
 
 
 def set_account_id(discord_id, uid):

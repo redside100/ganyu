@@ -88,6 +88,15 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
             discord_id = interaction.user.id
             unlinked_discord_id = None
 
+            existing_alt_uuid = db.alt_uid_exists(uid)
+            if existing_alt_uuid:
+                await interaction.edit_original_message(
+                    embed=create_message_embed(
+                        f"UID {uid} already exists as an alt account (uuid {existing_alt_uuid})."
+                    )
+                )
+                return
+
             if db.uid_exists(uid):
                 unlinked_discord_id = db.delete_entry_by_uid(uid)
 
@@ -119,6 +128,117 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
         await interaction.edit_original_message(
             embed=create_message_embed("Invalid auth cookies!", GANYU_COLORS["dark"])
         )
+
+
+@bot.slash_command(name="linkalt", description="Ganyu mod usage only.")
+async def link_alt(interaction: Interaction, ltuid: str, ltoken: str, name: str):
+
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+
+    if discord_id not in settings["ganyu_mods"]:
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "You can't use this command...", GANYU_COLORS["dark"]
+            )
+        )
+        return
+
+    if not ltuid.isnumeric():
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "Invalid ltuid (must a number)!", GANYU_COLORS["dark"]
+            ),
+            ephemeral=True,
+        )
+        return
+
+    user_client = Client({"ltuid": ltuid, "ltoken": ltoken})
+    user_client.default_game = genshin.Game.GENSHIN
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
+    try:
+        accounts = await user_client.genshin_accounts()
+        if len(accounts) > 0:
+
+            no_na_warning = False
+            na_account = None
+            for account in accounts:
+                if account.server_name == "America Server":
+                    na_account = account
+
+            if na_account is None:
+                na_account = accounts[0]
+                no_na_warning = True
+
+            uid = na_account.uid
+            level = na_account.level
+            username = na_account.nickname
+            discord_id = interaction.user.id
+
+            if db.uid_exists(uid):
+                await interaction.edit_original_message(
+                    embed=create_message_embed(
+                        f"UID {uid} already exists as a linked main account."
+                    )
+                )
+                return
+
+            existing_alt_uuid = db.alt_uid_exists(uid)
+
+            if existing_alt_uuid:
+                db.delete_alt_entry(existing_alt_uuid)
+
+            db.create_alt_entry(name, uid, ltuid, ltoken)
+
+            embed = create_link_profile_embed(
+                discord_id, interaction.user.avatar.url, uid, level, username
+            )
+
+            footer = "Alt account linked!"
+
+            if no_na_warning:
+                footer += " Warning: No NA account was found, the UID may be incorrect."
+
+            embed.set_footer(text=footer)
+
+            await interaction.edit_original_message(embed=embed)
+        else:
+            await interaction.edit_original_message(
+                embed=create_message_embed(
+                    "Alt account has no genshin accounts!", GANYU_COLORS["dark"]
+                )
+            )
+
+    except InvalidCookies:
+        await interaction.edit_original_message(
+            embed=create_message_embed("Invalid auth cookies!", GANYU_COLORS["dark"])
+        )
+
+
+@bot.slash_command(name="deletealt", description="Ganyu mod usage only.")
+async def delete_alt(interaction: Interaction, uuid: str):
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+
+    if discord_id not in settings["ganyu_mods"]:
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "You can't use this command...", GANYU_COLORS["dark"]
+            )
+        )
+        return
+
+    if not db.get_alt_data(uuid):
+        await interaction.response.send_message(
+            embed=create_message_embed("Alt with that UUID doesn't exist.")
+        )
+        return
+
+    db.delete_alt_entry(uuid)
+    await interaction.response.send_message(
+        embed=create_message_embed(f"Deleted alt with UUID {uuid}.")
+    )
 
 
 @bot.slash_command(
@@ -604,10 +724,38 @@ async def ganyu_status(interaction: Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+@bot.slash_command(name="listalts", description="Ganyu mod usage only.")
+async def list_alts(interaction: Interaction):
+    discord_id = interaction.user.id
+    settings = util.get_settings()
+
+    if discord_id not in settings["ganyu_mods"]:
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "You can't use this command...", GANYU_COLORS["dark"]
+            )
+        )
+        return
+
+    alt_accounts = db.get_all_alts()
+    description_lines = []
+    for alt in alt_accounts:
+        description_lines.append(f"{alt['id']} ({alt['name']}): **{alt['uid']}**")
+
+    embed = nextcord.Embed(
+        title=f"Linked Alts", description="\n".join(description_lines)
+    )
+    embed.colour = GANYU_COLORS["dark"]
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    await interaction.response.send_message(embed=embed)
+
+
 @scheduler.scheduled_job(util.DAILY_REWARD_CRON_TRIGGER, id="daily_rewards")
 async def auto_collect_daily_rewards():
 
     users = db.get_all_auto_checkin_users()
+    alt_users = db.get_all_alts()
+
     settings = util.get_settings()
     log_channel_id = settings.get("log_channel")
     success = 0
@@ -622,7 +770,7 @@ async def auto_collect_daily_rewards():
             # return
             await channel.send(
                 embed=create_message_embed(
-                    f"Collecting daily rewards for {len(users)} user(s)..."
+                    f"Collecting daily rewards for **{len(users)}** user(s), **{len(alt_users)}** alt(s)..."
                 )
             )
 
@@ -637,7 +785,20 @@ async def auto_collect_daily_rewards():
             success += 1
         except GenshinException:
             failed_users.append(user_data["discord_id"])
-            pass
+
+        await asyncio.sleep(random.randint(0, 2))
+
+    failed_alt_users = []
+    for user_data in alt_users:
+        user_client = Client(
+            {"ltuid": user_data["ltuid"], "ltoken": user_data["ltoken"]}
+        )
+        user_client.default_game = genshin.Game.GENSHIN
+        try:
+            await user_client.claim_daily_reward(reward=False)
+            success += 1
+        except GenshinException:
+            failed_alt_users.append(user_data["name"])
 
         await asyncio.sleep(random.randint(0, 2))
 
@@ -647,16 +808,18 @@ async def auto_collect_daily_rewards():
         if channel:
             await channel.send(
                 embed=create_message_embed(
-                    f"Successfully collected rewards for {success}/{len(users)} user(s)\n"
+                    f"Successfully collected rewards for {success}/{len(users) + len(alt_users)} user(s)\n"
                     f"Time elapsed: {time_elapsed} second(s)"
                 )
             )
             if failed_users:
-                failed_text = " ".join(
-                    [f"<@{user_id}>" for user_id in failed_users[:20]]
-                )
-                if len(failed_users) > 20:
-                    failed_text += f" and {len(failed_users) - 20} more..."
+                fails = [f"<@{user_id}>" for user_id in failed_users]
+                for name in failed_alt_users:
+                    fails.append(f"**{name}**")
+
+                failed_text = " ".join(fails[:20])
+                if len(fails) > 20:
+                    failed_text += f" and {len(fails) - 20} more..."
 
                 await channel.send(
                     embed=create_message_embed(f"Failed users: {failed_text}")
