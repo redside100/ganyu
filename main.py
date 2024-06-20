@@ -650,6 +650,7 @@ async def sendlog(interaction: Interaction, message: str):
             embed=create_message_embed(f"No master log channel is set")
         )
 
+
 @bot.slash_command(name="run", description="Ganyu mod usage only.")
 async def run_job(interaction: Interaction, job_id: str):
     discord_id = interaction.user.id
@@ -662,24 +663,23 @@ async def run_job(interaction: Interaction, job_id: str):
             )
         )
         return
-    
+
     job = scheduler.get_job(job_id)
 
     if not job:
         await interaction.response.send_message(
-            embed=create_message_embed(
-                "No job with that ID.", GANYU_COLORS["dark"]
-            )
+            embed=create_message_embed("No job with that ID.", GANYU_COLORS["dark"])
         )
         return
-    
+
     job.modify(next_run_time=datetime.datetime.now())
     await interaction.response.send_message(
         embed=create_message_embed(
-                f"Running job ID **{job_id}**.", GANYU_COLORS["dark"]
+            f"Running job ID **{job_id}**.", GANYU_COLORS["dark"]
         )
     )
-    
+
+
 @bot.slash_command(name="ganyustatus", description="Ganyu mod usage only.")
 async def ganyu_status(interaction: Interaction):
     discord_id = interaction.user.id
