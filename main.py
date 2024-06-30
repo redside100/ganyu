@@ -7,6 +7,7 @@ import random
 
 import genshin
 import nextcord
+import pytz
 import requests
 from nextcord import Interaction
 from nextcord.ext import commands
@@ -37,6 +38,7 @@ from util import (
     create_status_embed,
     MessageBook,
     get_client,
+    get_hsr_client,
 )
 
 logging.basicConfig()
@@ -122,6 +124,86 @@ async def link(interaction: Interaction, ltuid: str, ltoken: str):
             await interaction.edit_original_message(
                 embed=create_message_embed(
                     "You don't have any genshin accounts!", GANYU_COLORS["dark"]
+                )
+            )
+
+    except InvalidCookies:
+        await interaction.edit_original_message(
+            embed=create_message_embed("Invalid auth cookies!", GANYU_COLORS["dark"])
+        )
+
+
+@bot.slash_command(
+    name="linkhsr", description="Links a HSR/Hoyolab account to your Discord user."
+)
+async def link_hsr(
+    interaction: Interaction,
+    ltuid: str,
+    ltoken: str,
+    account_mid: str,
+    cookie_token: str,
+):
+
+    user_client = get_hsr_client(ltuid, ltoken, account_mid, cookie_token)
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed(), ephemeral=True)
+    try:
+        accounts = await user_client.get_game_accounts()
+        if len(accounts) > 0:
+            honkai_accounts = [
+                account for account in accounts if account.game == genshin.Game.STARRAIL
+            ]
+            if not honkai_accounts:
+                await interaction.edit_original_message(
+                    embed=create_message_embed(
+                        "You don't have any HSR accounts!", GANYU_COLORS["dark"]
+                    )
+                )
+                return
+
+            no_na_warning = False
+            na_account = None
+            for account in honkai_accounts:
+                if account.server_name == "America Server":
+                    na_account = account
+
+            if na_account is None:
+                na_account = accounts[0]
+                no_na_warning = True
+
+            uid = na_account.uid
+            level = na_account.level
+            username = na_account.nickname
+            discord_id = interaction.user.id
+            unlinked_discord_id = None
+
+            if db.hsr_uid_exists(uid):
+                unlinked_discord_id = db.hsr_delete_entry_by_uid(uid)
+
+            db.update_hsr_link_entry(
+                discord_id, uid, ltuid, ltoken, account_mid, cookie_token
+            )
+
+            embed = create_link_profile_embed(
+                discord_id, interaction.user.avatar.url, uid, level, username, True
+            )
+
+            if unlinked_discord_id:
+                embed.add_field(
+                    name="Old Discord User", value=f"<@{unlinked_discord_id}>"
+                )
+
+            if no_na_warning:
+                embed.set_footer(
+                    text="Warning: No NA account was found, the UID may be incorrect."
+                )
+
+            await interaction.edit_original_message(embed=embed)
+
+        else:
+            await interaction.edit_original_message(
+                embed=create_message_embed(
+                    "You don't have any game accounts!", GANYU_COLORS["dark"]
                 )
             )
 
@@ -326,6 +408,33 @@ async def profile(interaction: Interaction):
         )
 
 
+@bot.slash_command(
+    name="hsrprofile", description="Shows information about your linked HSR user."
+)
+async def hsr_profile(interaction: Interaction):
+    discord_id = interaction.user.id
+    discord_name = interaction.user.name
+    avatar_url = interaction.user.avatar.url
+    user_data = db.get_hsr_link_entry(discord_id)
+    if user_data:
+        user_settings = {
+            "HSR Auto Check-in": "No" if user_data["daily_reward"] == 0 else "Yes",
+        }
+        embed = create_profile_card_embed(
+            discord_name, avatar_url, user_data["uid"], user_settings
+        )
+        view = ProfileChoices(
+            discord_id, discord_name, avatar_url, True, interaction, is_hsr=True
+        )
+        await interaction.response.send_message(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "You don't have an HSR account linked.", GANYU_COLORS["dark"]
+            )
+        )
+
+
 @bot.user_command(name="Get Profile")
 async def get_profile(interaction: Interaction, member: nextcord.Member):
     target_data = db.get_link_entry(member.id)
@@ -370,6 +479,41 @@ async def claim(interaction: Interaction):
     try:
         reward = await user_client.claim_daily_reward()
 
+        await interaction.edit_original_message(
+            embed=create_reward_embed(reward.name, reward.amount, reward.icon)
+        )
+    except AlreadyClaimed:
+        await interaction.edit_original_message(
+            embed=create_message_embed(
+                "Daily reward was already claimed today!", GANYU_COLORS["dark"]
+            )
+        )
+
+
+@bot.slash_command(
+    name="hsrclaim", description="Attempt to manually claim your HSR daily reward."
+)
+async def hsr_claim(interaction: Interaction):
+    discord_id = interaction.user.id
+    user_data = db.get_hsr_link_entry(discord_id)
+    if not user_data:
+        await interaction.response.send_message(
+            embed=create_message_embed(
+                "You don't have a HSR account linked.", GANYU_COLORS["dark"]
+            )
+        )
+        return
+
+    user_client = get_hsr_client(
+        user_data["ltuid"],
+        user_data["ltoken"],
+        user_data["account_mid"],
+        user_data["cookie_token"],
+    )
+    # Using API takes time, keep interaction alive by sending a "loading" response
+    await interaction.response.send_message(embed=util.loading_embed())
+    try:
+        reward = await user_client.claim_daily_reward()
         await interaction.edit_original_message(
             embed=create_reward_embed(reward.name, reward.amount, reward.icon)
         )
@@ -672,7 +816,7 @@ async def run_job(interaction: Interaction, job_id: str):
         )
         return
 
-    job.modify(next_run_time=datetime.datetime.now())
+    job.modify(next_run_time=datetime.datetime.now(tz=pytz.UTC))
     await interaction.response.send_message(
         embed=create_message_embed(
             f"Running job ID **{job_id}**.", GANYU_COLORS["dark"]
@@ -704,11 +848,14 @@ async def ganyu_status(interaction: Interaction):
         embed.add_field(name="Log Channel", value=f"<#{log_channel_id}>", inline=False)
     jobs = util.get_scheduler_jobs(scheduler)
     next_timestamp = None
+    next_hsr_timestamp = None
     next_code_timestamp = None
     next_activity_feed_timestamp = None
     for job in jobs:
         if job["id"] == "daily_rewards":
             next_timestamp = job["next_run_time"].timestamp()
+        if job["id"] == "daily_hsr_rewards":
+            next_hsr_timestamp = job["next_run_time"].timestamp()
         if job["id"] == "code_poller":
             next_code_timestamp = job["next_run_time"].timestamp()
         if job["id"] == "activity_feed_update":
@@ -718,6 +865,12 @@ async def ganyu_status(interaction: Interaction):
         embed.add_field(
             name="Next Reward Collection",
             value=f"<t:{int(next_timestamp)}:F>",
+            inline=False,
+        )
+    if next_timestamp:
+        embed.add_field(
+            name="Next HSR Reward Collection",
+            value=f"<t:{int(next_hsr_timestamp)}:F>",
             inline=False,
         )
     if next_code_timestamp:
@@ -843,6 +996,75 @@ async def auto_collect_daily_rewards():
                 await channel.send(
                     embed=create_message_embed(
                         f"Next collection scheduled for <t:{int(next_timestamp)}:F>"
+                    )
+                )
+
+
+@scheduler.scheduled_job(util.DAILY_HSR_REWARD_CRON_TRIGGER, id="daily_hsr_rewards")
+async def auto_collect_hsr_daily_rewards():
+
+    users = db.get_all_hsr_auto_checkin_users()
+
+    settings = util.get_settings()
+    log_channel_id = settings.get("log_channel")
+    success = 0
+    start_time = int(time.time())
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+        if channel:
+            await channel.send(
+                embed=create_message_embed(
+                    f"Collecting daily HSR rewards for **{len(users)}** user(s)..."
+                )
+            )
+
+    failed_users = []
+    for user_data in users:
+        user_client = get_hsr_client(
+            user_data["ltuid"],
+            user_data["ltoken"],
+            user_data["account_mid"],
+            user_data["cookie_token"],
+        )
+        try:
+            await user_client.claim_daily_reward(reward=False)
+            success += 1
+        except GenshinException:
+            failed_users.append(user_data["discord_id"])
+
+        await asyncio.sleep(random.randint(0, 2))
+
+    time_elapsed = int(time.time()) - start_time
+    if log_channel_id:
+        channel = bot.get_channel(log_channel_id)
+        if channel:
+            await channel.send(
+                embed=create_message_embed(
+                    f"Successfully collected HSR rewards for {success}/{len(users)} user(s)\n"
+                    f"Time elapsed: {time_elapsed} second(s)"
+                )
+            )
+            if failed_users:
+                fails = [f"<@{user_id}>" for user_id in failed_users]
+
+                failed_text = " ".join(fails[:20])
+                if len(fails) > 20:
+                    failed_text += f" and {len(fails) - 20} more..."
+
+                await channel.send(
+                    embed=create_message_embed(f"Failed users: {failed_text}")
+                )
+
+            jobs = util.get_scheduler_jobs(scheduler)
+            next_timestamp = None
+            for job in jobs:
+                if job["id"] == "daily_hsr_rewards":
+                    next_timestamp = job["next_run_time"].timestamp()
+
+            if next_timestamp:
+                await channel.send(
+                    embed=create_message_embed(
+                        f"Next HSR collection scheduled for <t:{int(next_timestamp)}:F>"
                     )
                 )
 

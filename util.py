@@ -46,6 +46,10 @@ DAILY_REWARD_CRON_TRIGGER = CronTrigger(
     hour="17", timezone=pytz.UTC, jitter=3600  # anytime within that hour
 )
 
+DAILY_HSR_REWARD_CRON_TRIGGER = CronTrigger(
+    hour="18", timezone=pytz.UTC, jitter=3600  # anytime within that hour
+)
+
 CODE_POLLER_CRON_TRIGGER = CronTrigger(
     hour="*/2", timezone=pytz.UTC, jitter=600  # 10 min jitter
 )
@@ -143,11 +147,17 @@ def set_settings(settings):
         f.write(json.dumps(settings, indent=4, sort_keys=True))
 
 
-def create_link_profile_embed(discord_id, discord_avatar_url, uid, level, username):
-    embed = nextcord.Embed(title="Successfully linked!")
+def create_link_profile_embed(
+    discord_id, discord_avatar_url, uid, level, username, is_hsr=False
+):
+    embed = nextcord.Embed(
+        title=f"Successfully linked! ({'Genshin' if not is_hsr else 'HSR'})"
+    )
     embed.add_field(name="UID", value=uid)
     embed.add_field(name="Name", value=username)
-    embed.add_field(name="Adventure Rank", value=level)
+    embed.add_field(
+        name="Adventure Rank" if not is_hsr else "Trailblaze Level", value=level
+    )
     embed.add_field(name="Discord User", value=f"<@{discord_id}>")
     embed.set_thumbnail(url=discord_avatar_url)
     embed.colour = GANYU_COLORS["dark"]
@@ -406,38 +416,47 @@ class ProfileChoices(View):
         need_code_setup,
         base_interaction: Interaction,
         probe=False,
+        is_hsr=False,
     ):
         super().__init__(timeout=120)
         self.base_interaction: Interaction = base_interaction
         self.user_avatar = user_avatar
         self.user_name = user_name
         self.user_id = user_id
-        self.user_data = db.get_link_entry(self.user_id)
+        self.user_data = (
+            db.get_link_entry(self.user_id)
+            if not is_hsr
+            else db.get_hsr_link_entry(self.user_id)
+        )
+        self.is_hsr = is_hsr
 
         toggle_check_in_button = nextcord.ui.Button(
             label="Toggle Check-in", style=nextcord.ButtonStyle.blurple
         )
         toggle_check_in_button.callback = self.toggle_check_in
-        toggle_activity_button = nextcord.ui.Button(
-            label="Toggle Activity Tracking", style=nextcord.ButtonStyle.blurple
-        )
-        toggle_activity_button.callback = self.toggle_activity
-        enka_network_button = nextcord.ui.Button(
-            label="Enka Network",
-            style=nextcord.ButtonStyle.link,
-            url=f"https://enka.network/u/{self.user_data['uid']}",
-        )
-        akasha_cv_button = nextcord.ui.Button(
-            label="Akasha",
-            style=nextcord.ButtonStyle.link,
-            url=f"https://akasha.cv/profile/{self.user_data['uid']}",
-        )
         if not probe:
             self.add_item(toggle_check_in_button)
-            self.add_item(toggle_activity_button)
 
-        self.add_item(enka_network_button)
-        self.add_item(akasha_cv_button)
+        if not is_hsr:
+            toggle_activity_button = nextcord.ui.Button(
+                label="Toggle Activity Tracking", style=nextcord.ButtonStyle.blurple
+            )
+            toggle_activity_button.callback = self.toggle_activity
+            enka_network_button = nextcord.ui.Button(
+                label="Enka Network",
+                style=nextcord.ButtonStyle.link,
+                url=f"https://enka.network/u/{self.user_data['uid']}",
+            )
+            akasha_cv_button = nextcord.ui.Button(
+                label="Akasha",
+                style=nextcord.ButtonStyle.link,
+                url=f"https://akasha.cv/profile/{self.user_data['uid']}",
+            )
+            if not probe:
+                self.add_item(toggle_activity_button)
+
+            self.add_item(enka_network_button)
+            self.add_item(akasha_cv_button)
 
     async def toggle_check_in(self, interaction: nextcord.Interaction):
         if not interaction.user.id == self.user_id:
@@ -445,6 +464,20 @@ class ProfileChoices(View):
 
         if not self.user_data:
             self.stop()
+
+        if self.is_hsr:
+            db.set_hsr_daily_reward(self.user_id, not self.user_data["daily_reward"])
+            self.user_data["daily_reward"] = not self.user_data["daily_reward"]
+            user_settings = {
+                "HSR Auto Check-in": "No"
+                if self.user_data["daily_reward"] == 0
+                else "Yes",
+            }
+            embed = create_profile_card_embed(
+                self.user_name, self.user_avatar, self.user_data["uid"], user_settings
+            )
+            await self.base_interaction.edit_original_message(embed=embed)
+            return
 
         need_code_setup = (
             self.user_data["account_id"] is None
@@ -642,5 +675,29 @@ def get_client(ltuid: str, ltoken: str, is_genshin=True) -> Client:
 
     if is_genshin:
         client.default_game = genshin.Game.GENSHIN
+
+    return client
+
+
+def get_hsr_client(
+    ltuid: str, ltoken: str, account_mid: str, cookie_token: str
+) -> Client:
+    params = {}
+    if ltoken.startswith("v2"):
+        params["ltuid_v2"] = ltuid
+        params["ltoken_v2"] = ltoken
+    else:
+        params["ltuid"] = ltuid
+        params["ltoken"] = ltoken
+
+    if cookie_token.startswith("v2"):
+        params["account_mid_v2"] = account_mid
+        params["cookie_token_v2"] = cookie_token
+    else:
+        params["account_mid"] = account_mid
+        params["cookie_token"] = cookie_token
+
+    client = Client(params)
+    client.default_game = genshin.Game.STARRAIL
 
     return client
